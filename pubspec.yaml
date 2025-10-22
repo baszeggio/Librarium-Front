@@ -1,0 +1,67 @@
+name: librarium_front
+description: Librarium - RPG de Hábitos com temática dark fantasy
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI e navegação
+  cupertino_icons: ^1.0.2
+  go_router: ^12.1.3
+  flutter_svg: ^2.0.9
+  
+  # Estado e dados
+  provider: ^6.1.1
+  http: ^1.1.2
+  shared_preferences: ^2.2.2
+  
+  # Animações e efeitos
+  lottie: ^2.7.0
+  shimmer: ^3.0.0
+  confetti: ^0.7.0
+  
+  # Gráficos e visualizações
+  fl_chart: ^0.66.0
+  calendar_timeline: ^1.1.3
+  
+  # Utilitários
+  intl: ^0.19.0
+  uuid: ^4.2.1
+  cached_network_image: ^3.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/
+    - assets/backpack.png
+    - assets/blue_1.png
+    - assets/blue_2.png
+    - assets/blue_head.png
+    - assets/brown_1.png
+    - assets/brown_2.png
+    - assets/brown_head.png
+    - assets/gold_award.png
+    - assets/green_1.png
+    - assets/green_2.png
+    - assets/green_award.png
+    - assets/green_head.png
+    - assets/king_award.png
+    - assets/purple_1.png
+    - assets/purple_2.png
+    - assets/purple_head.png
+    - assets/red_1.png
+    - assets/red_2.png
+    - assets/red_award.png
+    - assets/red_head.png
+  

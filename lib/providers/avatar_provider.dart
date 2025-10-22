@@ -1,0 +1,98 @@
+import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+
+class Avatar {
+  final int nivel;
+  final Map<String, String> equipamentos;
+  final List<String> efeitos;
+  final String tema;
+  final int experiencia;
+  final int experienciaProximoNivel;
+
+  Avatar({
+    required this.nivel,
+    required this.equipamentos,
+    required this.efeitos,
+    required this.tema,
+    required this.experiencia,
+    required this.experienciaProximoNivel,
+  });
+
+  factory Avatar.fromJson(Map<String, dynamic> json) {
+    return Avatar(
+      nivel: json['nivel'] ?? 1,
+      equipamentos: Map<String, String>.from(json['equipamentos'] ?? {}),
+      efeitos: List<String>.from(json['efeitos'] ?? []),
+      tema: json['tema'] ?? 'default',
+      experiencia: json['experiencia'] ?? 0,
+      experienciaProximoNivel: json['experienciaProximoNivel'] ?? 100,
+    );
+  }
+
+  String get avatarImage {
+    // Retorna a imagem do avatar baseada no nível
+    switch (nivel) {
+      case 1:
+        return 'assets/avatars/level_1.png';
+      case 2:
+        return 'assets/avatars/level_2.png';
+      case 3:
+        return 'assets/avatars/level_3.png';
+      case 4:
+        return 'assets/avatars/level_4.png';
+      case 5:
+        return 'assets/avatars/level_5.png';
+      default:
+        return 'assets/avatars/level_6.png';
+    }
+  }
+
+  String get title {
+    if (nivel <= 10) return 'Aspirante';
+    if (nivel <= 20) return 'Caçador';
+    if (nivel <= 30) return 'Guardião do Librarium';
+    if (nivel <= 40) return 'Conjurador Supremo';
+    return 'Lenda Viva';
+  }
+
+  double get progressPercentage {
+    if (experienciaProximoNivel == 0) return 1.0;
+    return (experiencia / experienciaProximoNivel).clamp(0.0, 1.0);
+  }
+}
+
+class AvatarProvider extends ChangeNotifier {
+  Avatar? _avatar;
+  bool _isLoading = false;
+  String? _error;
+
+  Avatar? get avatar => _avatar;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  Future<void> loadAvatar() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final avatarData = await ApiService.getAvatar();
+      
+      if (avatarData['sucesso'] == true) {
+        _avatar = Avatar.fromJson(avatarData['avatar']);
+      } else {
+        throw Exception(avatarData['mensagem'] ?? 'Erro ao carregar avatar');
+      }
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+}
