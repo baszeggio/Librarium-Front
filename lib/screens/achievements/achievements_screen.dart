@@ -137,6 +137,39 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
 
         const SizedBox(height: 24),
 
+        // Conquistas Personalizadas
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Conquistas Personalizadas',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _showCreateCustomAchievementDialog(context),
+                child: const Text('Criar', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
         // Lista de conquistas
         Expanded(
           child: DefaultTabController(
@@ -169,6 +202,89 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showCreateCustomAchievementDialog(BuildContext context) {
+    final tituloController = TextEditingController();
+    final descricaoController = TextEditingController();
+    String raridade = 'comum';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          title: const Text('Nova Conquista', style: TextStyle(color: Colors.white)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: tituloController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título',
+                      labelStyle: TextStyle(color: Colors.grey),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descricaoController,
+                    decoration: const InputDecoration(
+                      labelText: 'Descrição',
+                      labelStyle: TextStyle(color: Colors.grey),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Raridade: ', style: TextStyle(color: Colors.white70)),
+                      const SizedBox(width: 8),
+                      DropdownButton<String>(
+                        value: raridade,
+                        dropdownColor: Theme.of(context).colorScheme.surface,
+                        items: const [
+                          DropdownMenuItem(value: 'comum', child: Text('Comum', style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(value: 'raro', child: Text('Raro', style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(value: 'epico', child: Text('Épico', style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(value: 'lendario', child: Text('Lendário', style: TextStyle(color: Colors.white))),
+                        ],
+                        onChanged: (v) => setState(() => raridade = v ?? 'comum'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (tituloController.text.trim().isEmpty) return;
+                context.read<AchievementsProvider>().addCustomAchievement(
+                      titulo: tituloController.text.trim(),
+                      descricao: descricaoController.text.trim(),
+                      raridade: raridade,
+                    );
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Conquista personalizada criada!'),
+                  ),
+                );
+              },
+              child: const Text('Criar'),
+            ),
+          ],
+        );
+      },
     );
   }
 

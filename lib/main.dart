@@ -14,6 +14,7 @@ import 'screens/achievements/achievements_screen.dart';
 import 'screens/stats/stats_screen.dart';
 import 'screens/multiplayer/multiplayer_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/customization/customization_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/api_service.dart';
 
@@ -81,6 +82,10 @@ class LibrariumApp extends StatelessWidget {
         GoRoute(
           path: '/profile',
           builder: (context, state) => const ProfileScreen(),
+        ),
+        GoRoute(
+          path: '/customization',
+          builder: (context, state) => const CustomizationScreen(),
         ),
       ],
     );

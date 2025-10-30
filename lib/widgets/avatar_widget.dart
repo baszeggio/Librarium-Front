@@ -42,7 +42,7 @@ class AvatarWidget extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Avatar principal
+          // Avatar principal (imagem de cabeça se disponível, senão ícone)
           Center(
             child: Container(
               width: size - 8,
@@ -55,10 +55,23 @@ class AvatarWidget extends StatelessWidget {
                   width: 2,
                 ),
               ),
-              child: Icon(
-                _getAvatarIcon(avatar!.nivel),
-                size: size * 0.5,
-                color: Colors.white,
+              child: Center(
+                child: ClipOval(
+                  child: (avatar!.headAsset != null)
+                      ? SizedBox(
+                          width: (size - 8) * 0.7,
+                          height: (size - 8) * 0.7,
+                          child: Image.asset(
+                            avatar!.headAsset!,
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      : Icon(
+                          _getAvatarIcon(avatar!.nivel),
+                          size: size * 0.5,
+                          color: Colors.white,
+                        ),
+                ),
               ),
             ),
           ),

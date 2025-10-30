@@ -42,18 +42,47 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      // Simular criação de hábito com dados mockados
-      await Future.delayed(const Duration(seconds: 1)); // Simular delay da API
-      
+      final habitsProvider = context.read<HabitsProvider>();
+      await habitsProvider.createHabit(
+        titulo: _titleController.text.trim(),
+        descricao: _descriptionController.text.trim(),
+        frequencia: _selectedFrequency,
+        categoria: _selectedCategory,
+        dificuldade: _selectedDifficulty,
+        icone: _selectedIcon,
+        cor: _selectedColor,
+      );
+
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        if (habitsProvider.error != null) {
+          // Fallback: criar exemplo local para demonstrar na lista
+          habitsProvider.addLocalHabitExample(
+            titulo: _titleController.text.trim(),
+            descricao: _descriptionController.text.trim(),
+            frequencia: _selectedFrequency,
+            categoria: _selectedCategory,
+            dificuldade: _selectedDifficulty,
+            icone: _selectedIcon,
+            cor: _selectedColor,
+          );
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sem conexão com a API. Exemplo local criado.'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

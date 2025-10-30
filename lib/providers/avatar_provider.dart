@@ -59,6 +59,14 @@ class Avatar {
     if (experienciaProximoNivel == 0) return 1.0;
     return (experiencia / experienciaProximoNivel).clamp(0.0, 1.0);
   }
+
+  // Retorna o asset da cabeça selecionada, se estiver configurado e válido
+  String? get headAsset {
+    final String? headKey = equipamentos['head'];
+    if (headKey == null) return null;
+    if (!headKey.endsWith('_head')) return null;
+    return 'assets/' + headKey + '.png';
+  }
 }
 
 class AvatarProvider extends ChangeNotifier {
@@ -93,6 +101,26 @@ class AvatarProvider extends ChangeNotifier {
 
   void clearError() {
     _error = null;
+    notifyListeners();
+  }
+
+  // Define a cabeça do avatar (apenas aceita chaves que terminam com "_head")
+  void setHead(String headKey) {
+    if (!headKey.endsWith('_head')) {
+      return; // ignora entradas inválidas
+    }
+
+    // Garante que exista um avatar em memória
+    _avatar ??= Avatar(
+      nivel: 1,
+      equipamentos: <String, String>{},
+      efeitos: <String>[],
+      tema: 'default',
+      experiencia: 0,
+      experienciaProximoNivel: 100,
+    );
+
+    _avatar!.equipamentos['head'] = headKey;
     notifyListeners();
   }
 }

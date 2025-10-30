@@ -39,10 +39,21 @@ class AchievementBadge extends StatelessWidget {
               color: achievement.rarityColor.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              _getAchievementIcon(achievement.tipo),
-              color: achievement.rarityColor,
-              size: 24,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: FittedBox(
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+                child: Image.asset(
+                  achievement.icone,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      _getAchievementIcon(achievement.tipo),
+                      color: achievement.rarityColor,
+                    );
+                  },
+                ),
+              ),
             ),
           ),
           

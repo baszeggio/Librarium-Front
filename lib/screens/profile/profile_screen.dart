@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/custom_button.dart';
+import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -119,11 +120,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: Column(
             children: [
-              // Avatar
-              AvatarWidget(
-                avatar: avatarProvider.avatar,
-                size: 100,
-                showLevel: true,
+              // Avatar (toque para escolher cabeça)
+              GestureDetector(
+                onTap: () => _showHeadPicker(context),
+                child: AvatarWidget(
+                  avatar: avatarProvider.avatar,
+                  size: 100,
+                  showLevel: true,
+                ),
               ),
               
               const SizedBox(height: 20),
@@ -157,6 +161,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[400],
                 ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showHeadPicker(BuildContext context) {
+    final Map<String, String> headAssets = const {
+      'red_head': 'assets/red_head.png',
+      'blue_head': 'assets/blue_head.png',
+      'purple_head': 'assets/purple_head.png',
+      'brown_head': 'assets/brown_head.png',
+      'green_head': 'assets/green_head.png',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Escolha sua cabeça',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: headAssets.length,
+                itemBuilder: (context, index) {
+                  final String key = headAssets.keys.elementAt(index);
+                  final String asset = headAssets[key]!;
+                  return InkWell(
+                    onTap: () {
+                      context.read<AvatarProvider>().setHead(key);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[800],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Image.asset(
+                          asset,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -374,6 +450,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           
+          _buildSettingItem(
+            icon: Icons.palette,
+            title: 'Customizar Personagem',
+            subtitle: 'Personalize a aparência do seu avatar',
+            onTap: () {
+              context.go('/customization');
+            },
+          ),
           _buildSettingItem(
             icon: Icons.help,
             title: 'Ajuda',
