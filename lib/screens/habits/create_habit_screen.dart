@@ -43,6 +43,7 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
 
     try {
       final habitsProvider = context.read<HabitsProvider>();
+      habitsProvider.clearError();
       await habitsProvider.createHabit(
         titulo: _titleController.text.trim(),
         descricao: _descriptionController.text.trim(),
@@ -52,7 +53,7 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
         icone: _selectedIcon,
         cor: _selectedColor,
       );
-
+      
       if (mounted) {
         if (habitsProvider.error != null) {
           // Fallback: criar exemplo local para demonstrar na lista
@@ -74,14 +75,14 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             ),
           );
         } else {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
         }
       }
     } catch (e) {

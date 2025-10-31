@@ -124,9 +124,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GestureDetector(
                 onTap: () => _showHeadPicker(context),
                 child: AvatarWidget(
-                  avatar: avatarProvider.avatar,
-                  size: 100,
-                  showLevel: true,
+                avatar: avatarProvider.avatar,
+                size: 100,
+                showLevel: true,
                 ),
               ),
               
@@ -213,9 +213,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final String key = headAssets.keys.elementAt(index);
                   final String asset = headAssets[key]!;
                   return InkWell(
-                    onTap: () {
-                      context.read<AvatarProvider>().setHead(key);
-                      Navigator.pop(context);
+                    onTap: () async {
+                      await context.read<AvatarProvider>().setHead(key);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
                     },
                     child: Container(
                       decoration: BoxDecoration(

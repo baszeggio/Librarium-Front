@@ -86,10 +86,13 @@ class AvatarProvider extends ChangeNotifier {
     try {
       final avatarData = await ApiService.getAvatar();
       
-      if (avatarData['sucesso'] == true) {
-        _avatar = Avatar.fromJson(avatarData['avatar']);
+      // Aceitar diferentes formatos de resposta
+      if (avatarData['sucesso'] == true || avatarData['success'] == true || avatarData['avatar'] != null) {
+        final avatarJson = avatarData['avatar'] ?? avatarData['data'] ?? avatarData;
+        final Map<String, dynamic> parsed = Map<String, dynamic>.from(avatarJson as Map);
+        _avatar = Avatar.fromJson(parsed);
       } else {
-        throw Exception(avatarData['mensagem'] ?? 'Erro ao carregar avatar');
+        throw Exception(avatarData['mensagem'] ?? avatarData['message'] ?? 'Erro ao carregar avatar');
       }
     } catch (e) {
       _error = e.toString();
@@ -105,7 +108,7 @@ class AvatarProvider extends ChangeNotifier {
   }
 
   // Define a cabeça do avatar (apenas aceita chaves que terminam com "_head")
-  void setHead(String headKey) {
+  Future<void> setHead(String headKey) async {
     if (!headKey.endsWith('_head')) {
       return; // ignora entradas inválidas
     }
@@ -122,5 +125,16 @@ class AvatarProvider extends ChangeNotifier {
 
     _avatar!.equipamentos['head'] = headKey;
     notifyListeners();
+
+    // Salvar no backend
+    try {
+      await ApiService.updateAvatarEquipament('head', headKey);
+      // Recarregar avatar para sincronizar com backend
+      await loadAvatar();
+    } catch (e) {
+      // Se falhar, mantém localmente mas registra erro
+      _error = 'Erro ao salvar no servidor: ${e.toString()}';
+      notifyListeners();
+    }
   }
 }

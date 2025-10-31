@@ -67,31 +67,48 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildStatsContent(StatsProvider statsProvider) {
-    // Preferir dados reais do provider, senão mostrar mock visível
-    final Stats stats = statsProvider.stats ?? Stats(
-      totalHabits: 12,
-      completedHabits: 8,
-      currentStreak: 7,
-      longestStreak: 21,
-      completionRate: 0.66,
-      totalXP: 1450,
-      level: 6,
-      categoryStats: const {
-        'saude': 4,
-        'estudo': 3,
-        'trabalho': 5,
-      },
-      weeklyData: const [
-        {'dia': 'Seg', 'valor': 2},
-        {'dia': 'Ter', 'valor': 1},
-        {'dia': 'Qua', 'valor': 2},
-        {'dia': 'Qui', 'valor': 1},
-        {'dia': 'Sex', 'valor': 2},
-        {'dia': 'Sáb', 'valor': 0},
-        {'dia': 'Dom', 'valor': 0},
-      ],
-      monthlyData: const [],
-    );
+    // Usar apenas dados reais do backend
+    final Stats? stats = statsProvider.stats;
+
+    if (stats == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.bar_chart,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Nenhum dado disponível',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                statsProvider.error ?? 'Carregue suas estatísticas do servidor.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[400],
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  statsProvider.loadStats();
+                },
+                child: const Text('Carregar Estatísticas'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),

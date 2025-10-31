@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -20,17 +21,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       final response = await ApiService.login(email, senha);
       
-      if (response['sucesso'] == true) {
+      if (response['sucesso'] == true && response['token'] != null) {
         _token = response['token'];
-        _user = response['usuario'];
+        // Backend DW pode não retornar 'usuario', apenas token
+        _user = response['usuario'] ?? {'email': email};
         _isAuthenticated = true;
         
         // Salvar token no SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', _token!);
-        await prefs.setString('user', response['usuario'].toString());
+        await prefs.setString('user', jsonEncode(_user));
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao fazer login');
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao fazer login');
       }
     } catch (e) {
       _isAuthenticated = false;
@@ -50,22 +52,15 @@ class AuthProvider extends ChangeNotifier {
     try {
       final response = await ApiService.register(nomeUsuario, email, senha);
       
+      // Backend DW apenas retorna mensagem de sucesso no registro, não token
+      // O usuário precisa fazer login após registro
       if (response['sucesso'] == true) {
-        _token = response['token'];
-        _user = response['usuario'];
-        _isAuthenticated = true;
-        
-        // Salvar token no SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', _token!);
-        await prefs.setString('user', response['usuario'].toString());
+        // Não autentica automaticamente após registro (como no DW original)
+        // Apenas mostra sucesso e redireciona para login
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao registrar');
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao registrar');
       }
     } catch (e) {
-      _isAuthenticated = false;
-      _user = null;
-      _token = null;
       rethrow;
     } finally {
       _isLoading = false;
@@ -94,16 +89,28 @@ class AuthProvider extends ChangeNotifier {
     if (token != null && userString != null) {
       _token = token;
       _isAuthenticated = true;
-      // Aqui você pode fazer uma chamada para verificar se o token ainda é válido
+      try {
+        // Tentar deserializar o usuário salvo
+        _user = jsonDecode(userString);
+      } catch (e) {
+        // Se falhar, tentar recarregar do servidor
+      }
+      
+      // Verificar se o token ainda é válido
       try {
         final userData = await ApiService.getProfile();
-        if (userData['sucesso'] == true) {
-          _user = userData['usuario'];
+        if (userData['sucesso'] == true || userData['usuario'] != null) {
+          _user = userData['usuario'] ?? userData['user'];
+          // Atualizar usuário salvo
+          await prefs.setString('user', jsonEncode(_user));
         } else {
           await logout();
         }
       } catch (e) {
-        await logout();
+        // Se falhar, mantém autenticado mas usa dados locais
+        if (_user == null) {
+          await logout();
+        }
       }
     }
     

@@ -165,19 +165,19 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: [
-                  Icon(
-                    Icons.sports_mma,
+            children: [
+              Icon(
+                Icons.sports_mma,
                     size: 32,
-                    color: Colors.red[400],
-                  ),
+                color: Colors.red[400],
+              ),
                   const SizedBox(width: 8),
-                  Text(
+              Text(
                     'Suas Batalhas',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
                   ),
                   const Spacer(),
                   IconButton(
@@ -194,9 +194,9 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                 Text(
                   'Erro ao carregar batalhas',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
-                ),
-                const SizedBox(height: 8),
-                Text(
+              ),
+              const SizedBox(height: 8),
+              Text(
                   _battlesError!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
                 ),

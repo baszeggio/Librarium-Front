@@ -35,21 +35,35 @@ class Habit {
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
+    // MongoDB retorna _id como ObjectId, que pode vir como string ou objeto
+    String getId() {
+      if (json['_id'] != null) {
+        if (json['_id'] is String) {
+          return json['_id'];
+        } else if (json['_id'] is Map && json['_id']['\$oid'] != null) {
+          return json['_id']['\$oid'];
+        } else {
+          return json['_id'].toString();
+        }
+      }
+      return json['id']?.toString() ?? '';
+    }
+
     return Habit(
-      id: json['_id'] ?? json['id'] ?? '',
-      titulo: json['titulo'] ?? '',
-      descricao: json['descricao'] ?? '',
-      frequencia: json['frequencia'] ?? 'diario',
-      categoria: json['categoria'] ?? 'geral',
-      dificuldade: json['dificuldade'] ?? 'medio',
-      icone: json['icone'] ?? 'espada',
-      cor: json['cor'] ?? '#6A0572',
-      ativo: json['ativo'] ?? true,
-      sequenciaAtual: json['sequencia']?['atual'] ?? 0,
-      maiorSequencia: json['sequencia']?['maiorSequencia'] ?? 0,
-      totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? 0,
-      totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? 0,
-      taxaConclusao: json['estatisticas']?['taxaConclusao']?.toDouble() ?? 0.0,
+      id: getId(),
+      titulo: json['titulo'] ?? json['title'] ?? '',
+      descricao: json['descricao'] ?? json['description'] ?? '',
+      frequencia: json['frequencia'] ?? json['frequency'] ?? 'diario',
+      categoria: json['categoria'] ?? json['category'] ?? 'geral',
+      dificuldade: json['dificuldade'] ?? json['difficulty'] ?? 'medio',
+      icone: json['icone'] ?? json['icon'] ?? 'espada',
+      cor: json['cor'] ?? json['color'] ?? '#6A0572',
+      ativo: json['ativo'] ?? json['active'] ?? true,
+      sequenciaAtual: json['sequencia']?['atual'] ?? json['sequencia']?['current'] ?? json['currentStreak'] ?? 0,
+      maiorSequencia: json['sequencia']?['maiorSequencia'] ?? json['sequencia']?['longest'] ?? json['longestStreak'] ?? 0,
+      totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? json['estatisticas']?['totalCompletions'] ?? json['totalCompletions'] ?? 0,
+      totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? json['estatisticas']?['totalMissed'] ?? json['totalMissed'] ?? 0,
+      taxaConclusao: (json['estatisticas']?['taxaConclusao'] ?? json['estatisticas']?['completionRate'] ?? json['completionRate'] ?? 0.0).toDouble(),
     );
   }
 }
@@ -73,44 +87,10 @@ class HabitsProvider extends ChangeNotifier {
 
     try {
       final habitsData = await ApiService.getHabits();
-      _habits = habitsData.map((habitJson) => Habit.fromJson(habitJson)).toList();
+      _habits = habitsData.map((habitJson) => Habit.fromJson(Map<String, dynamic>.from(habitJson as Map))).toList();
+      _error = null;
     } catch (e) {
-      // Fallback: preenche com exemplos locais para não deixar a tela vazia
-      _habits = [
-        Habit(
-          id: 'local_example_1',
-          titulo: 'Beber água',
-          descricao: '8 copos por dia',
-          frequencia: 'diario',
-          categoria: 'saude',
-          dificuldade: 'facil',
-          icone: 'coracao',
-          cor: '#45B7D1',
-          ativo: true,
-          sequenciaAtual: 2,
-          maiorSequencia: 7,
-          totalConclusoes: 5,
-          totalPerdidos: 1,
-          taxaConclusao: 0.83,
-        ),
-        Habit(
-          id: 'local_example_2',
-          titulo: 'Estudar 30min',
-          descricao: 'Foco em Flutter',
-          frequencia: 'diario',
-          categoria: 'estudo',
-          dificuldade: 'medio',
-          icone: 'livro',
-          cor: '#8250DF',
-          ativo: true,
-          sequenciaAtual: 4,
-          maiorSequencia: 10,
-          totalConclusoes: 12,
-          totalPerdidos: 3,
-          taxaConclusao: 0.8,
-        ),
-      ];
-      // Mantém o erro registrado, mas provê dados visíveis
+      _habits = [];
       _error = e.toString();
     } finally {
       _isLoading = false;
@@ -143,11 +123,16 @@ class HabitsProvider extends ChangeNotifier {
 
       final response = await ApiService.createHabit(habitData);
       
-      if (response['sucesso'] == true) {
-        final newHabit = Habit.fromJson(response['habito']);
+      // Aceitar diferentes formatos de resposta do backend
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Pode vir como 'habito', 'habit', 'data' ou diretamente o objeto
+        final habitJson = response['habito'] ?? response['habit'] ?? response['data'] ?? response;
+        final Map<String, dynamic> parsed = Map<String, dynamic>.from(habitJson as Map);
+        final newHabit = Habit.fromJson(parsed);
         _habits.add(newHabit);
+        _error = null;
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao criar hábito');
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao criar hábito');
       }
     } catch (e) {
       _error = e.toString();

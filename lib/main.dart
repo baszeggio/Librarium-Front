@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/habits_provider.dart';
@@ -21,16 +20,11 @@ import 'services/api_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('token');
-  
-  runApp(LibrariumApp(initialToken: token));
+  runApp(const LibrariumApp());
 }
 
 class LibrariumApp extends StatelessWidget {
-  final String? initialToken;
-  
-  const LibrariumApp({super.key, this.initialToken});
+  const LibrariumApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -42,22 +36,18 @@ class LibrariumApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AchievementsProvider()),
         ChangeNotifierProvider(create: (_) => StatsProvider()),
       ],
-      child: Consumer<AuthProvider>(
-        builder: (context, authProvider, child) {
-          return MaterialApp.router(
-            title: 'Librarium',
-            theme: AppTheme.darkTheme,
-            routerConfig: _createRouter(authProvider.isAuthenticated),
-            debugShowCheckedModeBanner: false,
-          );
-        },
+      child: MaterialApp.router(
+        title: 'Librarium',
+        theme: AppTheme.darkTheme,
+        routerConfig: _createRouter(),
+        debugShowCheckedModeBanner: false,
       ),
     );
   }
 
-  GoRouter _createRouter(bool isAuthenticated) {
+  GoRouter _createRouter() {
     return GoRouter(
-      initialLocation: '/dashboard', // Sempre vai direto para o dashboard
+      initialLocation: '/dashboard',
       routes: [
         GoRoute(
           path: '/dashboard',

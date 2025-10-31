@@ -46,43 +46,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                 );
               }
 
-              if (habitsProvider.error != null) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Erro ao carregar hábitos',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        habitsProvider.error!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[400],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      CustomButton(
-                        text: 'Tentar Novamente',
-                        onPressed: () {
-                          habitsProvider.loadHabits();
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              }
-
+              // Mesmo com erro, mostrar lista (com possíveis dados locais de fallback)
               return _buildHabitsList(habitsProvider);
             },
           ),
@@ -109,6 +73,35 @@ class _HabitsScreenState extends State<HabitsScreen> {
 
     return Column(
       children: [
+        if (habitsProvider.error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.redAccent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Falha ao carregar da API. Mostrando dados locais de exemplo.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => habitsProvider.loadHabits(),
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         // Header
         Padding(
           padding: const EdgeInsets.all(16),

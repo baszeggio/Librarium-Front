@@ -25,18 +25,56 @@ class Achievement {
   });
 
   factory Achievement.fromJson(Map<String, dynamic> json) {
+    // MongoDB retorna _id como ObjectId, que pode vir como string ou objeto
+    String getId() {
+      if (json['_id'] != null) {
+        if (json['_id'] is String) {
+          return json['_id'];
+        } else if (json['_id'] is Map && json['_id']['\$oid'] != null) {
+          return json['_id']['\$oid'];
+        } else {
+          return json['_id'].toString();
+        }
+      }
+      return json['id']?.toString() ?? '';
+    }
+
+    // Tratamento de data do MongoDB
+    DateTime? parseDate(dynamic dateValue) {
+      if (dateValue == null) return null;
+      if (dateValue is DateTime) return dateValue;
+      if (dateValue is String) {
+        try {
+          return DateTime.parse(dateValue);
+        } catch (e) {
+          return null;
+        }
+      }
+      if (dateValue is Map && dateValue['\$date'] != null) {
+        final dateStr = dateValue['\$date'];
+        if (dateStr is String) {
+          try {
+            return DateTime.parse(dateStr);
+          } catch (e) {
+            return null;
+          }
+        } else if (dateStr is int) {
+          return DateTime.fromMillisecondsSinceEpoch(dateStr);
+        }
+      }
+      return null;
+    }
+
     return Achievement(
-      id: json['_id'] ?? json['id'] ?? '',
-      tipo: json['tipo'] ?? '',
-      titulo: json['titulo'] ?? '',
-      descricao: json['descricao'] ?? '',
-      raridade: json['raridade'] ?? 'comum',
-      recompensaXP: json['recompensaXP'] ?? 0,
-      desbloqueada: json['desbloqueada'] ?? false,
-      dataDesbloqueio: json['dataDesbloqueio'] != null 
-          ? DateTime.parse(json['dataDesbloqueio']) 
-          : null,
-      icone: json['icone'] ?? 'trophy',
+      id: getId(),
+      tipo: json['tipo'] ?? json['type'] ?? '',
+      titulo: json['titulo'] ?? json['title'] ?? '',
+      descricao: json['descricao'] ?? json['description'] ?? '',
+      raridade: json['raridade'] ?? json['rarity'] ?? 'comum',
+      recompensaXP: json['recompensaXP'] ?? json['rewardXP'] ?? json['xp'] ?? 0,
+      desbloqueada: json['desbloqueada'] ?? json['unlocked'] ?? false,
+      dataDesbloqueio: parseDate(json['dataDesbloqueio'] ?? json['unlockedAt']),
+      icone: json['icone'] ?? json['icon'] ?? 'trophy',
     );
   }
 
@@ -97,9 +135,14 @@ class AchievementsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Usar conquistas mockadas com diferentes raridades
-      _achievements = _getMockAchievements();
+      final achievementsData = await ApiService.getAchievements();
+      _achievements = achievementsData.map((achievementJson) {
+        final Map<String, dynamic> parsed = Map<String, dynamic>.from(achievementJson as Map);
+        return Achievement.fromJson(parsed);
+      }).toList();
+      _error = null;
     } catch (e) {
+      _achievements = [];
       _error = e.toString();
     } finally {
       _isLoading = false;

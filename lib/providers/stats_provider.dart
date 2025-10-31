@@ -59,10 +59,13 @@ class StatsProvider extends ChangeNotifier {
     try {
       final statsData = await ApiService.getStats();
       
-      if (statsData['sucesso'] == true) {
-        _stats = Stats.fromJson(statsData['estatisticas']);
+      // Aceitar diferentes formatos de resposta
+      if (statsData['sucesso'] == true || statsData['success'] == true || statsData['estatisticas'] != null) {
+        final statsJson = statsData['estatisticas'] ?? statsData['statistics'] ?? statsData['data'] ?? statsData;
+        final Map<String, dynamic> parsed = Map<String, dynamic>.from(statsJson as Map);
+        _stats = Stats.fromJson(parsed);
       } else {
-        throw Exception(statsData['mensagem'] ?? 'Erro ao carregar estatísticas');
+        throw Exception(statsData['mensagem'] ?? statsData['message'] ?? 'Erro ao carregar estatísticas');
       }
     } catch (e) {
       _error = e.toString();

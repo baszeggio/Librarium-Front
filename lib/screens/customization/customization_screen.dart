@@ -108,13 +108,13 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                 child: Row(
                   children: [
                     TextButton(
-                      onPressed: () {
-                        if (Navigator.canPop(context)) {
-                          Navigator.pop(context);
-                        } else {
-                          context.go('/dashboard');
-                        }
-                      },
+                        onPressed: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            context.go('/dashboard');
+                          }
+                        },
                       child: const Text(
                         'Voltar',
                         style: TextStyle(color: Colors.white),
@@ -175,7 +175,7 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                       Image.asset(
                                         (_animationController.value < 0.5)
                                             ? _colorAssets[_selectedColor]!
-                                            : _colorAssets2[_selectedColor]!,
+                                            : (_colorAssets2[_selectedColor] ?? _colorAssets[_selectedColor]!),
                                         width: 200,
                                         height: 200,
                                         fit: BoxFit.contain,
@@ -302,10 +302,10 @@ class _CustomizationScreenState extends State<CustomizationScreen>
               ),
 
               // Seleção de cabeças removida desta tela
-            ],
-          ),
-        ),
-      ),
+                    ],
+                  ),
+                ),
+              ),
       // Removido FAB; usamos o botão de texto no cabeçalho
     );
   }
