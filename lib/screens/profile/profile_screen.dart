@@ -381,6 +381,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
                 ...avatar.equipamentos.entries.map((entry) {
+                  // Limitar tamanho do texto para evitar overflow
+                  String valueStr = entry.value.toString();
+                  if (valueStr.length > 30) {
+                    valueStr = '${valueStr.substring(0, 27)}...';
+                  }
+                  
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
@@ -391,10 +397,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Colors.grey[400],
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          '${_getEquipmentName(entry.key)}: ${entry.value}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[400],
+                        Expanded(
+                          child: Text(
+                            '${_getEquipmentName(entry.key)}: $valueStr',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[400],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
                       ],

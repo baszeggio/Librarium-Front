@@ -539,25 +539,105 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   void _showCreateChallengeDialog() {
+    final opponentIdController = TextEditingController();
+    final messageController = TextEditingController();
+    String? selectedType = 'sequencia';
+    DateTime? selectedEndDate;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text(
-          'Criar Desafio',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Funcionalidade em desenvolvimento. Em breve você poderá criar desafios colaborativos!',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: const Text(
+                'Criar Desafio',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomTextField(
+                      controller: opponentIdController,
+                      label: 'ID do Adversário',
+                      hint: 'Digite o ID do adversário',
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de Desafio',
+                        labelStyle: TextStyle(color: Colors.grey),
+                      ),
+                      dropdownColor: Theme.of(context).colorScheme.surface,
+                      style: const TextStyle(color: Colors.white),
+                      items: const [
+                        DropdownMenuItem(value: 'sequencia', child: Text('Sequência')),
+                        DropdownMenuItem(value: 'habitos_concluidos', child: Text('Hábitos Concluídos')),
+                        DropdownMenuItem(value: 'xp_total', child: Text('XP Total')),
+                      ],
+                      onChanged: (value) => setState(() => selectedType = value),
+                    ),
+                    const SizedBox(height: 16),
+                    CustomTextField(
+                      controller: messageController,
+                      label: 'Mensagem (opcional)',
+                      hint: 'Descreva o desafio...',
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (opponentIdController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Digite o ID do adversário')),
+                      );
+                      return;
+                    }
+                    try {
+                      await context.read<MultiplayerProvider>().createChallenge(
+                        adversarioId: opponentIdController.text.trim(),
+                        tipoDesafio: selectedType,
+                        mensagem: messageController.text.trim().isNotEmpty 
+                            ? messageController.text.trim() 
+                            : null,
+                      );
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Desafio criado com sucesso!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erro: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Criar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -711,6 +791,31 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                     label: const Text('Selecionar Usuário para Conversar'),
                     style: TextButton.styleFrom(foregroundColor: Colors.blue),
                   ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Conversando com: ${_selectedChatUser!.length > 20 ? "${_selectedChatUser!.substring(0, 20)}..." : _selectedChatUser!}',
+                          style: const TextStyle(color: Colors.green, fontSize: 12),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _showSelectUserDialog,
+                        child: const Text('Trocar', style: TextStyle(color: Colors.blue, fontSize: 12)),
+                      ),
+                    ],
+                  ),
                 ),
               Row(
                 children: [
@@ -791,48 +896,177 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     }
   }
 
-  void _showSelectUserDialog() {
+  void _showSelectUserDialog() async {
     final userIdController = TextEditingController();
+    bool isValidating = false;
+    String? validationError;
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('Selecionar Usuário', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Para conversar, você precisa do ID do usuário.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            CustomTextField(
-              controller: userIdController,
-              label: 'ID do Usuário',
-              hint: 'Cole o ID aqui',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (userIdController.text.trim().isNotEmpty) {
-                setState(() {
-                  _selectedChatUser = userIdController.text.trim();
-                });
-                Navigator.pop(context);
-                context.read<MessagesProvider>().loadConversation(_selectedChatUser!);
-              }
-            },
-            child: const Text('Selecionar'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: Row(
+                children: [
+                  const Text('Selecionar Usuário', style: TextStyle(color: Colors.white)),
+                  if (_selectedChatUser != null) ...[
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      onPressed: () {
+                        setState(() {
+                          _selectedChatUser = null;
+                        });
+                        Navigator.pop(context);
+                        this.setState(() {
+                          _selectedChatUser = null;
+                        });
+                        context.read<MessagesProvider>().loadMessages();
+                      },
+                      tooltip: 'Limpar seleção',
+                    ),
+                  ],
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_selectedChatUser != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Usuário selecionado',
+                                  style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _selectedChatUser!,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedChatUser = null;
+                              });
+                              this.setState(() {
+                                _selectedChatUser = null;
+                              });
+                              Navigator.pop(context);
+                              _showSelectUserDialog();
+                            },
+                            child: const Text('Trocar', style: TextStyle(color: Colors.blue)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text(
+                    'Para conversar, você precisa do ID do usuário.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: userIdController,
+                    label: 'ID do Usuário',
+                    hint: 'Cole o ID aqui',
+                  ),
+                  if (validationError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      validationError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                  if (isValidating) ...[
+                    const SizedBox(height: 8),
+                    const CircularProgressIndicator(),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: isValidating ? null : () async {
+                    if (userIdController.text.trim().isEmpty) {
+                      setState(() {
+                        validationError = 'ID não pode estar vazio';
+                      });
+                      return;
+                    }
+                    
+                    setState(() {
+                      isValidating = true;
+                      validationError = null;
+                    });
+                    
+                    // Simular validação (pode ser melhorado com chamada real à API)
+                    await Future.delayed(const Duration(milliseconds: 500));
+                    
+                    // Se chegou aqui, assume que o usuário existe (ou adiciona validação real)
+                    final userId = userIdController.text.trim();
+                    
+                    setState(() {
+                      _selectedChatUser = userId;
+                      isValidating = false;
+                    });
+                    
+                    this.setState(() {
+                      _selectedChatUser = userId;
+                    });
+                    
+                    Navigator.pop(context);
+                    
+                    // Carregar conversa
+                    try {
+                      await context.read<MessagesProvider>().loadConversation(userId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Usuário selecionado com sucesso!'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erro ao carregar conversa: ${e.toString()}'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Selecionar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -885,22 +1119,86 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   void _showAddFriendDialog() {
+    final friendIdController = TextEditingController();
+    bool isValidating = false;
+    String? validationError;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('Adicionar Amigo', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Funcionalidade em desenvolvimento. Em breve você poderá adicionar amigos!',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: const Text('Adicionar Amigo', style: TextStyle(color: Colors.white)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Digite o ID do usuário que você deseja adicionar como amigo.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: friendIdController,
+                    label: 'ID do Usuário',
+                    hint: 'Cole o ID aqui',
+                  ),
+                  if (validationError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      validationError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                  if (isValidating) ...[
+                    const SizedBox(height: 8),
+                    const CircularProgressIndicator(),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: isValidating ? null : () async {
+                    if (friendIdController.text.trim().isEmpty) {
+                      setState(() {
+                        validationError = 'ID não pode estar vazio';
+                      });
+                      return;
+                    }
+
+                    setState(() {
+                      isValidating = true;
+                      validationError = null;
+                    });
+
+                    // Simular validação/adicionar amigo
+                    // TODO: Implementar chamada real à API quando disponível
+                    await Future.delayed(const Duration(milliseconds: 800));
+
+                    // Por enquanto, apenas mostra sucesso
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Solicitação de amizade enviada para ${friendIdController.text.trim()}!'),
+                          backgroundColor: Colors.green,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Adicionar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

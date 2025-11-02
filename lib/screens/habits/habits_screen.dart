@@ -90,18 +90,24 @@ class _HabitsScreenState extends State<HabitsScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const CreateHabitScreen(),
-            ),
-          );
-        },
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        icon: const Icon(Icons.add),
-        label: const Text('Novo Hábito'),
+      floatingActionButton: SafeArea(
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CreateHabitScreen(),
+              ),
+            );
+          },
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          icon: const Icon(Icons.add),
+          label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: const Text('Novo Hábito'),
+          ),
+          extendedPadding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
       ),
     );
   }

@@ -440,8 +440,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: HabitCard(
                   habit: habit,
-                  onComplete: () {
-                    habitsProvider.completeHabit(habit.id);
+                  onComplete: () async {
+                    await habitsProvider.completeHabit(habit.id);
+                    // Recarregar estatísticas para atualizar streak
+                    await context.read<StatsProvider>().loadStats();
+                    // Recarregar avatar também
+                    await context.read<AvatarProvider>().loadAvatar();
                   },
                   onDelete: () {
                     _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);
