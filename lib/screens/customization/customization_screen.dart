@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-// Seleção de cabeça foi movida para a tela de perfil
+import 'package:provider/provider.dart';
+import '../../providers/avatar_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class CustomizationScreen extends StatefulWidget {
   const CustomizationScreen({super.key});
@@ -12,12 +14,11 @@ class CustomizationScreen extends StatefulWidget {
 class _CustomizationScreenState extends State<CustomizationScreen>
     with TickerProviderStateMixin {
   String _selectedColor = 'red';
-  // Cabeça não é mais selecionada nesta tela
+  bool _isSaving = false;
   late AnimationController _animationController;
   late AnimationController _breathingController;
   late Animation<double> _animation;
   late Animation<double> _breathingAnimation;
-  // Alternância contínua entre sprites _1 e _2
 
   final Map<String, String> _colorAssets = {
     'red': 'assets/red_1.png',
@@ -34,12 +35,17 @@ class _CustomizationScreenState extends State<CustomizationScreen>
     'brown': 'assets/brown_2.png',
     'green': 'assets/green_2.png',
   };
-
-  // Sem mapas de cabeças aqui
-
+  
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCurrentCustomization();
+    });
+  }
+
+  void _initializeAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -68,6 +74,21 @@ class _CustomizationScreenState extends State<CustomizationScreen>
     _animationController.repeat(reverse: true);
   }
 
+  Future<void> _loadCurrentCustomization() async {
+    final avatarProvider = context.read<AvatarProvider>();
+    await avatarProvider.loadAvatar();
+    
+    if (avatarProvider.avatar != null) {
+      setState(() {
+        // Carregar cor do tema ou bodyColor
+        final avatar = avatarProvider.avatar!;
+        final tema = avatar.tema;
+        final bodyColor = avatar.equipamentos['bodyColor'];
+        _selectedColor = bodyColor ?? tema ?? 'red';
+      });
+    }
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
@@ -93,8 +114,9 @@ class _CustomizationScreenState extends State<CustomizationScreen>
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
               // Header
               Container(
                 padding: const EdgeInsets.all(16),
@@ -108,13 +130,13 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                 child: Row(
                   children: [
                     TextButton(
-                        onPressed: () {
-                          if (Navigator.canPop(context)) {
-                            Navigator.pop(context);
-                          } else {
-                            context.go('/dashboard');
-                          }
-                        },
+                      onPressed: () {
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          context.go('/dashboard');
+                        }
+                      },
                       child: const Text(
                         'Voltar',
                         style: TextStyle(color: Colors.white),
@@ -135,8 +157,8 @@ class _CustomizationScreenState extends State<CustomizationScreen>
               const SizedBox(height: 24),
 
               // Área do personagem animado
-              Expanded(
-                flex: 3,
+              SizedBox(
+                height: 300,
                 child: Container(
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(24),
@@ -172,13 +194,38 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                     alignment: Alignment.center,
                                     children: [
                                       // Corpo do personagem
-                                      Image.asset(
-                                        (_animationController.value < 0.5)
-                                            ? _colorAssets[_selectedColor]!
-                                            : (_colorAssets2[_selectedColor] ?? _colorAssets[_selectedColor]!),
-                                        width: 200,
-                                        height: 200,
-                                        fit: BoxFit.contain,
+                                      Builder(
+                                        builder: (context) {
+                                          final asset1 = _colorAssets[_selectedColor];
+                                          final asset2 = _colorAssets2[_selectedColor];
+                                          final currentAsset = (_animationController.value < 0.5)
+                                              ? asset1
+                                              : asset2;
+                                          
+                                          if (currentAsset == null) {
+                                            return Container(
+                                              width: 200,
+                                              height: 200,
+                                              color: Colors.grey[800],
+                                              child: Icon(Icons.error, color: Colors.grey[600], size: 40),
+                                            );
+                                          }
+                                          
+                                          return Image.asset(
+                                            currentAsset,
+                                            width: 200,
+                                            height: 200,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Container(
+                                                width: 200,
+                                                height: 200,
+                                                color: Colors.grey[800],
+                                                child: Icon(Icons.error, color: Colors.grey[600], size: 40),
+                                              );
+                                            },
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
@@ -202,51 +249,55 @@ class _CustomizationScreenState extends State<CustomizationScreen>
               ),
 
               // Seleção de cores
-              Expanded(
-                flex: 1,
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey.withOpacity(0.3),
-                    ),
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.grey.withOpacity(0.3),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Escolha a Cor do Seu Personagem',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Escolha a Cor do Seu Personagem',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 20),
-                      
-                      // Grid de cores
-                      Expanded(
-                        child: GridView.builder(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 5,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            childAspectRatio: 1.0,
-                          ),
-                          itemCount: _colorAssets.length,
-                          itemBuilder: (context, index) {
-                            final colorKey = _colorAssets.keys.elementAt(index);
-                            final isSelected = _selectedColor == colorKey;
-                            
-                            return GestureDetector(
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Grid de cores - formato horizontal
+                    SizedBox(
+                      height: 80,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _colorAssets.length,
+                        itemBuilder: (context, index) {
+                          final colorKey = _colorAssets.keys.elementAt(index);
+                          final isSelected = _selectedColor == colorKey;
+                          final asset1 = _colorAssets[colorKey];
+                          final asset2 = _colorAssets2[colorKey];
+                          
+                          if (asset1 == null || asset2 == null) {
+                            return const SizedBox.shrink();
+                          }
+                          
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: GestureDetector(
                               onTap: () {
                                 setState(() {
                                   _selectedColor = colorKey;
                                 });
                               },
                               child: Container(
+                                width: 70,
                                 decoration: BoxDecoration(
                                   color: isSelected 
                                       ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
@@ -262,7 +313,6 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // Preview do personagem
                                     Container(
                                       width: 40,
                                       height: 40,
@@ -275,8 +325,14 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: Image.asset(
-                                          _colorAssets[colorKey]!,
+                                          asset1,
                                           fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: Colors.grey[800],
+                                              child: Icon(Icons.error, color: Colors.grey[600], size: 20),
+                                            );
+                                          },
                                         ),
                                       ),
                                     ),
@@ -292,22 +348,77 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                   ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Botão de salvar
+                    CustomButton(
+                      text: _isSaving ? 'Salvando...' : 'Salvar Customização',
+                      onPressed: _isSaving ? null : _saveCustomization,
+                      isLoading: _isSaving,
+                      width: double.infinity,
+                    ),
+                  ],
                 ),
               ),
 
-              // Seleção de cabeças removida desta tela
-                    ],
-                  ),
-                ),
-              ),
-      // Removido FAB; usamos o botão de texto no cabeçalho
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+  }
+
+  Future<void> _saveCustomization() async {
+    setState(() => _isSaving = true);
+    
+    try {
+      final avatarProvider = context.read<AvatarProvider>();
+      
+      // Criar objeto de customização correto para a API
+      final currentAvatar = avatarProvider.avatar;
+      final customization = {
+        'personalizacaoAvatar': {
+          'tema': _selectedColor,
+          'bodyColor': _selectedColor,
+          // Preservar head existente se houver
+          if (currentAvatar != null && currentAvatar.equipamentos['head'] != null)
+            'head': currentAvatar.equipamentos['head']!,
+        }
+      };
+      
+      await avatarProvider.customizeAvatar(customization);
+      
+      // Forçar recarregamento para garantir que está sincronizado
+      await avatarProvider.loadAvatar();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customização salva com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   String _getColorName(String colorKey) {
@@ -327,5 +438,4 @@ class _CustomizationScreenState extends State<CustomizationScreen>
     }
   }
 
-  // Sem nomes de cabeça nesta tela
 }

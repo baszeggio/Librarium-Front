@@ -18,6 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Carregar avatar quando a tela é aberta
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AvatarProvider>().loadAvatar();
     });
@@ -124,21 +125,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GestureDetector(
                 onTap: () => _showHeadPicker(context),
                 child: AvatarWidget(
-                avatar: avatarProvider.avatar,
-                size: 100,
-                showLevel: true,
+                  avatar: avatarProvider.avatar,
+                  size: 100,
+                  showLevel: true,
                 ),
               ),
               
               const SizedBox(height: 20),
               
               // Nome do usuário
-              Text(
-                'Guerreiro',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+              Consumer<AuthProvider>(
+                builder: (context, authProvider, child) {
+                  final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
+                                    authProvider.user?['nome'] ?? 
+                                    'Guerreiro';
+                  return Text(
+                    nomeUsuario,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
               ),
               
               const SizedBox(height: 8),
@@ -156,11 +164,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               
               // Email
-              Text(
-                'guerreiro@librarium.com',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[400],
-                ),
+              Consumer<AuthProvider>(
+                builder: (context, authProvider, child) {
+                  final email = authProvider.user?['email'] ?? 'Não disponível';
+                  return Text(
+                    email,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[400],
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -214,9 +227,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final String asset = headAssets[key]!;
                   return InkWell(
                     onTap: () async {
-                      await context.read<AvatarProvider>().setHead(key);
-                      if (context.mounted) {
-                        Navigator.pop(context);
+                      try {
+                        final avatarProvider = context.read<AvatarProvider>();
+                        await avatarProvider.setHead(key);
+                        
+                        // Aguardar um pouco para garantir que o estado foi atualizado
+                        await Future.delayed(const Duration(milliseconds: 100));
+                        
+                        // Forçar recarregamento do avatar
+                        await avatarProvider.loadAvatar();
+                        
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Foto de perfil atualizada!'),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Erro ao atualizar: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                     child: Container(
@@ -460,6 +499,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context.go('/customization');
             },
           ),
+          
+          _buildSettingItem(
+            icon: Icons.trending_up,
+            title: 'Evoluir Avatar',
+            subtitle: 'Forçar verificação de evolução',
+            onTap: () async {
+              try {
+                await context.read<AvatarProvider>().evolveAvatar();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Avatar verificado e evoluído!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erro: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
           _buildSettingItem(
             icon: Icons.help,
             title: 'Ajuda',
@@ -532,9 +599,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // Simular logout - apenas fechar o dialog
+              await context.read<AuthProvider>().logout();
+              if (context.mounted) {
+                context.go('/login');
+              }
             },
             child: const Text(
               'Sair',

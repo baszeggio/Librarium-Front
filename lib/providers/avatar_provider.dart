@@ -63,9 +63,10 @@ class Avatar {
   // Retorna o asset da cabeça selecionada, se estiver configurado e válido
   String? get headAsset {
     final String? headKey = equipamentos['head'];
-    if (headKey == null) return null;
+    if (headKey == null || headKey.isEmpty) return null;
     if (!headKey.endsWith('_head')) return null;
-    return 'assets/' + headKey + '.png';
+    // Verificar se o asset existe (assumindo que existe se termina com _head)
+    return 'assets/$headKey.png';
   }
 }
 
@@ -84,18 +85,168 @@ class AvatarProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final avatarData = await ApiService.getAvatar();
-      
-      // Aceitar diferentes formatos de resposta
-      if (avatarData['sucesso'] == true || avatarData['success'] == true || avatarData['avatar'] != null) {
-        final avatarJson = avatarData['avatar'] ?? avatarData['data'] ?? avatarData;
-        final Map<String, dynamic> parsed = Map<String, dynamic>.from(avatarJson as Map);
-        _avatar = Avatar.fromJson(parsed);
+      // Endpoint /api/avatar não existe - ir direto para o fallback do perfil
+      // Tentar pegar do perfil do usuário (endpoint correto)
+      final profileData = await ApiService.getProfile();
+      if (profileData['sucesso'] == true && profileData['usuario'] != null) {
+        final usuario = profileData['usuario'];
+        final nivel = usuario['nivel'] ?? 1;
+        final experiencia = usuario['experiencia'] ?? 0;
+        
+        // Calcular XP necessário para próximo nível baseado no sistema do backend
+        // Nível 1-10: 100 XP por nível
+        // Nível 11-20: 200 XP por nível  
+        // Nível 21-30: 300 XP por nível
+        // Nível 31-40: 400 XP por nível
+        // Nível 41+: 500 XP por nível
+        int experienciaProximoNivel = 100;
+        if (nivel < 10) {
+          experienciaProximoNivel = 100; // XP necessário para passar do nível atual para o próximo
+        } else if (nivel < 20) {
+          experienciaProximoNivel = 200;
+        } else if (nivel < 30) {
+          experienciaProximoNivel = 300;
+        } else if (nivel < 40) {
+          experienciaProximoNivel = 400;
+        } else {
+          experienciaProximoNivel = 500;
+        }
+        
+        // Converter personalizacaoAvatar corretamente (pode vir como Map<String, dynamic>)
+        Map<String, String> equipamentos = {};
+        if (usuario['personalizacaoAvatar'] != null) {
+          final personalizacao = usuario['personalizacaoAvatar'];
+          if (personalizacao is Map) {
+            personalizacao.forEach((key, value) {
+              if (key is String && value is String) {
+                equipamentos[key] = value;
+              } else if (key is String && value != null) {
+                equipamentos[key] = value.toString();
+              }
+            });
+          }
+        }
+        
+        _avatar = Avatar(
+          nivel: nivel,
+          equipamentos: equipamentos,
+          efeitos: List<String>.from(usuario['efeitos'] ?? []),
+          tema: usuario['tema'] ?? 'default',
+          experiencia: experiencia,
+          experienciaProximoNivel: experienciaProximoNivel,
+        );
       } else {
-        throw Exception(avatarData['mensagem'] ?? avatarData['message'] ?? 'Erro ao carregar avatar');
+        // Se não conseguir, deixar avatar como null silenciosamente
+        _avatar = null;
+      }
+    } catch (e) {
+      // Não mostrar erro - apenas deixar avatar como null
+      _avatar = null;
+      // Apenas logar o erro em debug, não expor para o usuário
+      print('Erro ao carregar avatar (endpoint pode não existir): $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> evolveAvatar() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.forceAvatarEvolution();
+      if (response['sucesso'] == true) {
+        await loadAvatar();
+      } else {
+        throw Exception(response['mensagem'] ?? 'Erro ao evoluir avatar');
       }
     } catch (e) {
       _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> customizeAvatar(Map<String, dynamic> customization) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.customizeAvatar(customization);
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Atualizar localmente primeiro para feedback imediato
+        if (customization['personalizacaoAvatar'] != null) {
+          final personalizacao = customization['personalizacaoAvatar'] as Map<String, dynamic>;
+          _avatar ??= Avatar(
+            nivel: 1,
+            equipamentos: <String, String>{},
+            efeitos: <String>[],
+            tema: 'default',
+            experiencia: 0,
+            experienciaProximoNivel: 100,
+          );
+          
+          // Atualizar tema e bodyColor
+          if (personalizacao['tema'] != null) {
+            _avatar = Avatar(
+              nivel: _avatar!.nivel,
+              equipamentos: Map<String, String>.from(_avatar!.equipamentos)
+                ..addAll(Map<String, String>.from(
+                  personalizacao.map((key, value) => MapEntry(key.toString(), value.toString()))
+                )),
+              efeitos: _avatar!.efeitos,
+              tema: personalizacao['tema']?.toString() ?? _avatar!.tema,
+              experiencia: _avatar!.experiencia,
+              experienciaProximoNivel: _avatar!.experienciaProximoNivel,
+            );
+          }
+        }
+        
+        // Recarregar do servidor para garantir sincronização
+        await loadAvatar();
+      } else {
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao customizar avatar');
+      }
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<dynamic>> loadAvailableEquipment() async {
+    try {
+      final equipment = await ApiService.getAvailableEquipment();
+      return equipment;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return [];
+    }
+  }
+
+  Future<void> equipItem(String itemId, String itemType) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.equipItem(itemId, itemType);
+      if (response['sucesso'] == true) {
+        await loadAvatar();
+      } else {
+        throw Exception(response['mensagem'] ?? 'Erro ao equipar item');
+      }
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -113,7 +264,16 @@ class AvatarProvider extends ChangeNotifier {
       return; // ignora entradas inválidas
     }
 
-    // Garante que exista um avatar em memória
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    // Garante que exista um avatar em memória - carregar se não existir
+    if (_avatar == null) {
+      await loadAvatar();
+    }
+
+    // Se ainda não tiver avatar, criar um básico
     _avatar ??= Avatar(
       nivel: 1,
       equipamentos: <String, String>{},
@@ -123,17 +283,53 @@ class AvatarProvider extends ChangeNotifier {
       experienciaProximoNivel: 100,
     );
 
+    // Atualizar localmente primeiro para feedback imediato
+    final oldHead = _avatar!.equipamentos['head'];
+    final oldEquipamentos = Map<String, String>.from(_avatar!.equipamentos);
     _avatar!.equipamentos['head'] = headKey;
+    
+    // Criar nova instância do Avatar para garantir que o headAsset seja recalculado
+    _avatar = Avatar(
+      nivel: _avatar!.nivel,
+      equipamentos: Map<String, String>.from(_avatar!.equipamentos),
+      efeitos: List<String>.from(_avatar!.efeitos),
+      tema: _avatar!.tema,
+      experiencia: _avatar!.experiencia,
+      experienciaProximoNivel: _avatar!.experienciaProximoNivel,
+    );
+    
     notifyListeners();
-
-    // Salvar no backend
+    
+    // Salvar no servidor
     try {
-      await ApiService.updateAvatarEquipament('head', headKey);
-      // Recarregar avatar para sincronizar com backend
-      await loadAvatar();
+      final response = await ApiService.customizeAvatar({
+        'personalizacaoAvatar': {
+          ...oldEquipamentos,
+          'head': headKey,
+        }
+      });
+      
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Recarregar avatar do servidor para garantir sincronização completa
+        await loadAvatar();
+      } else {
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao salvar');
+      }
     } catch (e) {
-      // Se falhar, mantém localmente mas registra erro
-      _error = 'Erro ao salvar no servidor: ${e.toString()}';
+      // Reverter se falhar
+      _avatar = Avatar(
+        nivel: _avatar!.nivel,
+        equipamentos: oldEquipamentos,
+        efeitos: List<String>.from(_avatar!.efeitos),
+        tema: _avatar!.tema,
+        experiencia: _avatar!.experiencia,
+        experienciaProximoNivel: _avatar!.experienciaProximoNivel,
+      );
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/multiplayer_provider.dart';
+import '../../providers/messages_provider.dart';
 import '../../widgets/custom_button.dart';
-import '../../services/api_service.dart';
+import '../../widgets/custom_text_field.dart';
+import '../ranking/ranking_screen.dart';
 
 class MultiplayerScreen extends StatefulWidget {
   const MultiplayerScreen({super.key});
@@ -13,45 +16,25 @@ class MultiplayerScreen extends StatefulWidget {
 }
 
 class _MultiplayerScreenState extends State<MultiplayerScreen> {
-  bool _isLoadingBattles = false;
-  String? _battlesError;
-  List<dynamic> _battles = const [];
-  final List<Map<String, String>> _messages = [];
   final TextEditingController _chatController = TextEditingController();
-  final List<Map<String, String>> _friends = [
-    {'nome': 'Artemis', 'status': 'online'},
-    {'nome': 'Theron', 'status': 'offline'},
-  ];
+  final TextEditingController _opponentIdController = TextEditingController();
+  String? _selectedChatUser;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadBattles();
+      context.read<MultiplayerProvider>().loadBattles();
+      context.read<MultiplayerProvider>().loadChallenges();
+      context.read<MessagesProvider>().loadMessages();
     });
   }
 
-  Future<void> _loadBattles() async {
-    setState(() {
-      _isLoadingBattles = true;
-      _battlesError = null;
-    });
-    try {
-      final battles = await ApiService.getBattles();
-      setState(() {
-        _battles = battles;
-      });
-    } catch (e) {
-      setState(() {
-        _battlesError = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingBattles = false;
-        });
-      }
-    }
+  @override
+  void dispose() {
+    _chatController.dispose();
+    _opponentIdController.dispose();
+    super.dispose();
   }
   @override
   Widget build(BuildContext context) {
@@ -165,122 +148,149 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-            children: [
-              Icon(
-                Icons.sports_mma,
+                children: [
+                  Icon(
+                    Icons.sports_mma,
                     size: 32,
-                color: Colors.red[400],
-              ),
+                    color: Colors.red[400],
+                  ),
                   const SizedBox(width: 8),
-              Text(
+                  Text(
                     'Suas Batalhas',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: _loadBattles,
+                    onPressed: () {
+                      context.read<MultiplayerProvider>().loadBattles();
+                    },
                     icon: const Icon(Icons.refresh, color: Colors.white),
                     tooltip: 'Atualizar',
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              if (_isLoadingBattles) ...[
-                const Center(child: CircularProgressIndicator()),
-              ] else if (_battlesError != null) ...[
-                Text(
-                  'Erro ao carregar batalhas',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                  _battlesError!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
-                ),
-              ] else if (_battles.isEmpty) ...[
-                Text(
-                  'Nenhuma batalha encontrada.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
-                ),
-              ] else ...[
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _battles.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final b = _battles[index] as Map<String, dynamic>;
-                    final String opponent = (b['oponente'] ?? b['opponent'] ?? 'Desconhecido').toString();
-                    final String status = (b['status'] ?? 'indefinido').toString();
-                    final String result = (b['resultado'] ?? 'n/a').toString();
-                    final String startedAt = (b['inicio'] ?? b['startedAt'] ?? '').toString();
-                    final String finishedAt = (b['fim'] ?? b['finishedAt'] ?? '').toString();
-                    final rewards = b['recompensas'] ?? b['rewards'];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[900],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.withOpacity(0.2)),
+              Consumer<MultiplayerProvider>(
+                builder: (context, multiplayerProvider, child) {
+                  if (multiplayerProvider.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  
+                  if (multiplayerProvider.error != null) {
+                    return Column(
+                      children: [
+                        Text(
+                          'Erro ao carregar batalhas',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          multiplayerProvider.error!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
+                        ),
+                      ],
+                    );
+                  }
+                  
+                  final battles = multiplayerProvider.battles;
+                  if (battles.isEmpty) {
+                    return Text(
+                      'Nenhuma batalha encontrada.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                    );
+                  }
+                  
+                  return Column(
+                    children: [
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: battles.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final battle = battles[index];
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[900],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  battle.status == 'concluida' ? Icons.emoji_events : Icons.sports_mma,
+                                  color: Colors.red[300],
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Vs. ${battle.jogador2}',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: [
+                                          _buildTag('Status: ${battle.status}'),
+                                          _buildTag('Tipo: ${battle.tipoBatalha}'),
+                                          if (battle.resultado != null) 
+                                            _buildTag('Resultado: ${battle.resultado?['vencedor'] ?? 'Empate'}'),
+                                        ],
+                                      ),
+                                      if (battle.status == 'aguardando')
+                                        const SizedBox(height: 8),
+                                      if (battle.status == 'aguardando')
+                                        CustomButton(
+                                          text: 'Aceitar',
+                                          onPressed: () {
+                                            multiplayerProvider.acceptBattle(battle.id);
+                                          },
+                                          backgroundColor: Colors.green,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      child: Row(
+                      const SizedBox(height: 16),
+                      Row(
                         children: [
-                          Icon(
-                            status == 'concluida' || status == 'finished' ? Icons.emoji_events : Icons.sports_mma,
-                            color: Colors.red[300],
+                          Expanded(
+                            child: CustomButton(
+                              text: 'Criar Batalha',
+                              onPressed: () => _showCreateBattleDialog(context),
+                              backgroundColor: Colors.red,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Vs. $opponent',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  children: [
-                                    _buildTag('Status: $status'),
-                                    if (result.isNotEmpty) _buildTag('Resultado: $result'),
-                                    if (startedAt.isNotEmpty) _buildTag('Início: $startedAt'),
-                                    if (finishedAt.isNotEmpty) _buildTag('Fim: $finishedAt'),
-                                    if (rewards != null) _buildTag('Recompensas: ${rewards.toString()}'),
-                                  ],
-                                ),
-                              ],
+                            child: CustomButton(
+                              text: 'Atualizar',
+                              onPressed: () {
+                                multiplayerProvider.loadBattles();
+                              },
+                              backgroundColor: Colors.grey[800],
                             ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: CustomButton(
-                      text: 'Criar Batalha',
-                      onPressed: _showCreateBattleDialog,
-                      backgroundColor: Colors.red,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: CustomButton(
-                      text: 'Atualizar',
-                      onPressed: _loadBattles,
-                      backgroundColor: Colors.grey[800],
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -424,31 +434,108 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     );
   }
 
-  void _showCreateBattleDialog() {
+  void _showCreateBattleDialog(BuildContext context) {
+    final opponentIdController = TextEditingController();
+    String? selectedType = 'sequencia';
+    final durationController = TextEditingController(text: '60');
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text(
-          'Criar Batalha',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Funcionalidade em desenvolvimento. Em breve você poderá criar batalhas PvP!',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: const Text(
+                'Criar Batalha',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomTextField(
+                      controller: opponentIdController,
+                      label: 'ID do Adversário',
+                      hint: 'Digite o ID do adversário',
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de Batalha',
+                        labelStyle: TextStyle(color: Colors.grey),
+                      ),
+                      dropdownColor: Theme.of(context).colorScheme.surface,
+                      style: const TextStyle(color: Colors.white),
+                      items: const [
+                        DropdownMenuItem(value: 'sequencia', child: Text('Sequência')),
+                        DropdownMenuItem(value: 'xp_diario', child: Text('XP Diário')),
+                        DropdownMenuItem(value: 'habitos_concluidos', child: Text('Hábitos Concluídos')),
+                      ],
+                      onChanged: (value) => setState(() => selectedType = value),
+                    ),
+                    const SizedBox(height: 16),
+                    CustomTextField(
+                      controller: durationController,
+                      label: 'Duração (minutos)',
+                      hint: '60',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (opponentIdController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Digite o ID do adversário')),
+                      );
+                      return;
+                    }
+                    try {
+                      await context.read<MultiplayerProvider>().createBattle(
+                        adversarioId: opponentIdController.text.trim(),
+                        tipoBatalha: selectedType,
+                        duracao: int.tryParse(durationController.text) ?? 60,
+                      );
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Batalha criada com sucesso!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erro: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Criar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   void _showBattlesList() {
-    _loadBattles();
+    context.read<MultiplayerProvider>().loadBattles();
   }
 
   void _showCreateChallengeDialog() {
@@ -498,24 +585,10 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   void _showRanking() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text(
-          'Ranking Global',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Funcionalidade em desenvolvimento. Em breve você poderá ver o ranking global!',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RankingScreen(),
       ),
     );
   }
@@ -562,57 +635,105 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   color: Colors.grey[900],
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: _messages.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Sem mensagens ainda. Diga oi!',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                child: Consumer<MessagesProvider>(
+                  builder: (context, messagesProvider, child) {
+                    final messages = messagesProvider.messages;
+                    if (_selectedChatUser == null) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[600]),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Selecione um usuário para começar',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final m = _messages[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            child: Row(
+                      );
+                    }
+                    return messages.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.account_circle, color: Colors.white70),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: RichText(
-                                    text: TextSpan(
-                                      children: [
-                                        TextSpan(text: '${m['autor']}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        TextSpan(text: m['texto'] ?? ''),
-                                      ],
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                  ),
+                                Icon(Icons.message, size: 48, color: Colors.grey[600]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Nenhuma mensagem ainda.\nDiga oi!',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                                  textAlign: TextAlign.center,
                                 ),
                               ],
                             ),
+                          )
+                        : ListView.builder(
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final m = messages[index];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.account_circle, color: Colors.white70),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: '${m.remetente}: ',
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            TextSpan(text: m.texto),
+                                          ],
+                                          style: const TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           );
-                        },
-                      ),
+                  },
+                ),
               ),
               const SizedBox(height: 12),
+              if (_selectedChatUser == null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TextButton.icon(
+                    onPressed: _showSelectUserDialog,
+                    icon: const Icon(Icons.person_add, size: 18),
+                    label: const Text('Selecionar Usuário para Conversar'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                  ),
+                ),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _chatController,
-                      decoration: const InputDecoration(
-                        hintText: 'Escreva uma mensagem...',
-                        hintStyle: TextStyle(color: Colors.grey),
+                      decoration: InputDecoration(
+                        hintText: _selectedChatUser == null 
+                            ? 'Selecione um usuário primeiro...'
+                            : 'Escreva uma mensagem...',
+                        hintStyle: const TextStyle(color: Colors.grey),
+                        enabled: _selectedChatUser != null,
                       ),
                       style: const TextStyle(color: Colors.white),
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   IconButton(
-                    onPressed: _sendMessage,
+                    onPressed: _selectedChatUser == null ? null : _sendMessage,
                     icon: const Icon(Icons.send, color: Colors.white),
+                    tooltip: _selectedChatUser == null 
+                        ? 'Selecione um usuário primeiro'
+                        : 'Enviar mensagem',
                   ),
                 ],
               ),
@@ -623,13 +744,96 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     );
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
-    setState(() {
-      _messages.add({'autor': 'Você', 'texto': text});
+    
+    if (_selectedChatUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione um usuário para conversar primeiro'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      _showSelectUserDialog();
+      return;
+    }
+    
+    try {
+      final messagesProvider = context.read<MessagesProvider>();
+      await messagesProvider.sendMessage(
+        destinatarioId: _selectedChatUser!,
+        texto: text,
+        tipo: 'geral',
+      );
+      
       _chatController.clear();
-    });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Mensagem enviada!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao enviar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSelectUserDialog() {
+    final userIdController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: const Text('Selecionar Usuário', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Para conversar, você precisa do ID do usuário.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            CustomTextField(
+              controller: userIdController,
+              label: 'ID do Usuário',
+              hint: 'Cole o ID aqui',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (userIdController.text.trim().isNotEmpty) {
+                setState(() {
+                  _selectedChatUser = userIdController.text.trim();
+                });
+                Navigator.pop(context);
+                context.read<MessagesProvider>().loadConversation(_selectedChatUser!);
+              }
+            },
+            child: const Text('Selecionar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFriendsSection() {
@@ -668,45 +872,11 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              if (_friends.isEmpty)
-                Text(
-                  'Você ainda não tem amigos.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
-                )
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _friends.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final f = _friends[index];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[900],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.account_circle, color: f['status'] == 'online' ? Colors.green : Colors.grey),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              f['nome'] ?? 'Jogador',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Text(
-                            f['status'] ?? '',
-                            style: TextStyle(color: f['status'] == 'online' ? Colors.green : Colors.grey),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+              Text(
+                'Funcionalidade de amigos em desenvolvimento.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -715,36 +885,19 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   void _showAddFriendDialog() {
-    final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
         title: const Text('Adicionar Amigo', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Nome do jogador',
-            labelStyle: TextStyle(color: Colors.grey),
-          ),
-          style: const TextStyle(color: Colors.white),
+        content: const Text(
+          'Funcionalidade em desenvolvimento. Em breve você poderá adicionar amigos!',
+          style: TextStyle(color: Colors.grey),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                setState(() {
-                  _friends.add({'nome': name, 'status': 'offline'});
-                });
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Adicionar'),
+            child: const Text('OK'),
           ),
         ],
       ),

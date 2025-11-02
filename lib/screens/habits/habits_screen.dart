@@ -5,6 +5,8 @@ import '../../providers/habits_provider.dart';
 import '../../widgets/habit_card.dart';
 import '../../widgets/custom_button.dart';
 import 'create_habit_screen.dart';
+import 'edit_habit_screen.dart';
+import 'habit_detail_screen.dart';
 
 class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key});
@@ -46,7 +48,43 @@ class _HabitsScreenState extends State<HabitsScreen> {
                 );
               }
 
-              // Mesmo com erro, mostrar lista (com possíveis dados locais de fallback)
+              if (habitsProvider.error != null) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.red[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Erro ao carregar hábitos',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        habitsProvider.error!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[400],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      CustomButton(
+                        text: 'Tentar Novamente',
+                        onPressed: () {
+                          habitsProvider.loadHabits();
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               return _buildHabitsList(habitsProvider);
             },
           ),
@@ -73,35 +111,6 @@ class _HabitsScreenState extends State<HabitsScreen> {
 
     return Column(
       children: [
-        if (habitsProvider.error != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.redAccent),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Falha ao carregar da API. Mostrando dados locais de exemplo.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => habitsProvider.loadHabits(),
-                    child: const Text('Tentar novamente'),
-                  ),
-                ],
-              ),
-            ),
-          ),
         // Header
         Padding(
           padding: const EdgeInsets.all(16),
@@ -149,11 +158,69 @@ class _HabitsScreenState extends State<HabitsScreen> {
                     final habit = habits[index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: HabitCard(
-                        habit: habit,
-                        onComplete: () {
-                          habitsProvider.completeHabit(habit.id);
+                      child: Dismissible(
+                        key: Key(habit.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Excluir Hábito'),
+                              content: const Text('Tem certeza que deseja excluir este hábito?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                  child: const Text('Excluir'),
+                                ),
+                              ],
+                            ),
+                          ) ?? false;
                         },
+                        onDismissed: (direction) async {
+                          try {
+                            await habitsProvider.deleteHabit(habit.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Hábito "${habit.titulo}" deletado com sucesso!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Erro ao deletar hábito: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: HabitCard(
+                          habit: habit,
+                          onComplete: () {
+                            habitsProvider.completeHabit(habit.id);
+                          },
+                          onDelete: () {
+                            _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);
+                          },
+                        ),
                       ),
                     );
                   },
@@ -218,6 +285,56 @@ class _HabitsScreenState extends State<HabitsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, String habitId, String habitTitle, HabitsProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: const Text(
+          'Deletar Hábito',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Tem certeza que deseja deletar o hábito "$habitTitle"?\n\nEsta ação não pode ser desfeita.',
+          style: const TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await provider.deleteHabit(habitId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Hábito "$habitTitle" deletado com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erro ao deletar hábito: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Deletar'),
+          ),
+        ],
       ),
     );
   }

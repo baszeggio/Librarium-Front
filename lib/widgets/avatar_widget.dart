@@ -57,20 +57,33 @@ class AvatarWidget extends StatelessWidget {
               ),
               child: Center(
                 child: ClipOval(
-                  child: (avatar!.headAsset != null)
-                      ? SizedBox(
+                  child: Builder(
+                    builder: (context) {
+                      final headAsset = avatar!.headAsset;
+                      if (headAsset != null) {
+                        return SizedBox(
                           width: (size - 8) * 0.7,
                           height: (size - 8) * 0.7,
                           child: Image.asset(
-                            avatar!.headAsset!,
+                            headAsset,
                             fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                _getAvatarIcon(avatar!.nivel),
+                                size: size * 0.5,
+                                color: Colors.white,
+                              );
+                            },
                           ),
-                        )
-                      : Icon(
-                          _getAvatarIcon(avatar!.nivel),
-                          size: size * 0.5,
-                          color: Colors.white,
-                        ),
+                        );
+                      }
+                      return Icon(
+                        _getAvatarIcon(avatar!.nivel),
+                        size: size * 0.5,
+                        color: Colors.white,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

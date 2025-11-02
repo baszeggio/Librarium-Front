@@ -122,6 +122,20 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
               ),
               const Spacer(),
               IconButton(
+                onPressed: () async {
+                  await achievementsProvider.verifyAchievements();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Verificando conquistas...'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.auto_awesome),
+                color: Colors.white,
+                tooltip: 'Verificar Conquistas',
+              ),
+              IconButton(
                 onPressed: () {
                   achievementsProvider.loadAchievements();
                 },
@@ -266,19 +280,33 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
               child: const Text('Cancelar'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 if (tituloController.text.trim().isEmpty) return;
-                context.read<AchievementsProvider>().addCustomAchievement(
-                      titulo: tituloController.text.trim(),
-                      descricao: descricaoController.text.trim(),
-                      raridade: raridade,
+                try {
+                  await context.read<AchievementsProvider>().createCustomAchievement(
+                    titulo: tituloController.text.trim(),
+                    descricao: descricaoController.text.trim(),
+                    raridade: raridade,
+                  );
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Conquista personalizada criada!'),
+                        backgroundColor: Colors.green,
+                      ),
                     );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Conquista personalizada criada!'),
-                  ),
-                );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Erro: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               child: const Text('Criar'),
             ),

@@ -35,35 +35,21 @@ class Habit {
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
-    // MongoDB retorna _id como ObjectId, que pode vir como string ou objeto
-    String getId() {
-      if (json['_id'] != null) {
-        if (json['_id'] is String) {
-          return json['_id'];
-        } else if (json['_id'] is Map && json['_id']['\$oid'] != null) {
-          return json['_id']['\$oid'];
-        } else {
-          return json['_id'].toString();
-        }
-      }
-      return json['id']?.toString() ?? '';
-    }
-
     return Habit(
-      id: getId(),
-      titulo: json['titulo'] ?? json['title'] ?? '',
-      descricao: json['descricao'] ?? json['description'] ?? '',
-      frequencia: json['frequencia'] ?? json['frequency'] ?? 'diario',
-      categoria: json['categoria'] ?? json['category'] ?? 'geral',
-      dificuldade: json['dificuldade'] ?? json['difficulty'] ?? 'medio',
-      icone: json['icone'] ?? json['icon'] ?? 'espada',
-      cor: json['cor'] ?? json['color'] ?? '#6A0572',
-      ativo: json['ativo'] ?? json['active'] ?? true,
-      sequenciaAtual: json['sequencia']?['atual'] ?? json['sequencia']?['current'] ?? json['currentStreak'] ?? 0,
-      maiorSequencia: json['sequencia']?['maiorSequencia'] ?? json['sequencia']?['longest'] ?? json['longestStreak'] ?? 0,
-      totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? json['estatisticas']?['totalCompletions'] ?? json['totalCompletions'] ?? 0,
-      totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? json['estatisticas']?['totalMissed'] ?? json['totalMissed'] ?? 0,
-      taxaConclusao: (json['estatisticas']?['taxaConclusao'] ?? json['estatisticas']?['completionRate'] ?? json['completionRate'] ?? 0.0).toDouble(),
+      id: json['_id'] ?? json['id'] ?? '',
+      titulo: json['titulo'] ?? '',
+      descricao: json['descricao'] ?? '',
+      frequencia: json['frequencia'] ?? 'diario',
+      categoria: json['categoria'] ?? 'geral',
+      dificuldade: json['dificuldade'] ?? 'medio',
+      icone: json['icone'] ?? 'espada',
+      cor: json['cor'] ?? '#6A0572',
+      ativo: json['ativo'] ?? true,
+      sequenciaAtual: json['sequencia']?['atual'] ?? 0,
+      maiorSequencia: json['sequencia']?['maiorSequencia'] ?? 0,
+      totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? 0,
+      totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? 0,
+      taxaConclusao: json['estatisticas']?['taxaConclusao']?.toDouble() ?? 0.0,
     );
   }
 }
@@ -87,9 +73,14 @@ class HabitsProvider extends ChangeNotifier {
 
     try {
       final habitsData = await ApiService.getHabits();
-      _habits = habitsData.map((habitJson) => Habit.fromJson(Map<String, dynamic>.from(habitJson as Map))).toList();
-      _error = null;
+      if (habitsData.isNotEmpty) {
+        _habits = habitsData.map((habitJson) => Habit.fromJson(habitJson)).toList();
+      } else {
+        // Lista vazia - usuário não tem hábitos ainda
+        _habits = [];
+      }
     } catch (e) {
+      // Não usar dados mock - mostrar lista vazia e erro
       _habits = [];
       _error = e.toString();
     } finally {
@@ -123,14 +114,17 @@ class HabitsProvider extends ChangeNotifier {
 
       final response = await ApiService.createHabit(habitData);
       
-      // Aceitar diferentes formatos de resposta do backend
       if (response['sucesso'] == true || response['success'] == true) {
-        // Pode vir como 'habito', 'habit', 'data' ou diretamente o objeto
-        final habitJson = response['habito'] ?? response['habit'] ?? response['data'] ?? response;
-        final Map<String, dynamic> parsed = Map<String, dynamic>.from(habitJson as Map);
-        final newHabit = Habit.fromJson(parsed);
-        _habits.add(newHabit);
-        _error = null;
+        // Recarregar hábitos para incluir o novo
+        await loadHabits();
+        
+        // Verificar conquistas automaticamente após criar hábito
+        try {
+          await ApiService.verifyAchievements();
+        } catch (e) {
+          // Silenciar erro se a verificação falhar
+          print('Erro ao verificar conquistas: $e');
+        }
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao criar hábito');
       }
@@ -177,15 +171,87 @@ class HabitsProvider extends ChangeNotifier {
     try {
       final response = await ApiService.completeHabit(habitId);
       
-      if (response['sucesso'] == true) {
+      if (response['sucesso'] == true || response['success'] == true) {
         // Recarregar hábitos para obter dados atualizados
         await loadHabits();
+        
+        // Verificar conquistas automaticamente após completar hábito
+        try {
+          await ApiService.verifyAchievements();
+        } catch (e) {
+          // Silenciar erro se a verificação falhar
+          print('Erro ao verificar conquistas: $e');
+        }
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao completar hábito');
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao completar hábito');
       }
     } catch (e) {
       _error = e.toString();
       notifyListeners();
+    }
+  }
+
+  Future<void> deleteHabit(String habitId) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.deleteHabit(habitId);
+      
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Remover hábito da lista local
+        _habits.removeWhere((habit) => habit.id == habitId);
+      } else {
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao deletar hábito');
+      }
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateHabit(String habitId, Map<String, dynamic> habitData) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.updateHabit(habitId, habitData);
+      
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Recarregar hábitos para obter dados atualizados
+        await loadHabits();
+      } else {
+        throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao atualizar hábito');
+      }
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> getHabitProgress(String habitId) async {
+    try {
+      final response = await ApiService.getHabitProgress(habitId);
+      return response;
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    }
+  }
+
+  Habit? getHabitById(String habitId) {
+    try {
+      return _habits.firstWhere((habit) => habit.id == habitId);
+    } catch (e) {
+      return null;
     }
   }
 

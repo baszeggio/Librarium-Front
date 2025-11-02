@@ -67,48 +67,26 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildStatsContent(StatsProvider statsProvider) {
-    // Usar apenas dados reais do backend
-    final Stats? stats = statsProvider.stats;
-
-    if (stats == null) {
+    // Usar apenas dados reais do provider
+    if (statsProvider.stats == null) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.bar_chart,
-                size: 64,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'Carregando estatísticas...',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Colors.grey[400],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Nenhum dado disponível',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                statsProvider.error ?? 'Carregue suas estatísticas do servidor.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[400],
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  statsProvider.loadStats();
-                },
-                child: const Text('Carregar Estatísticas'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
+    
+    final Stats stats = statsProvider.stats!;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),

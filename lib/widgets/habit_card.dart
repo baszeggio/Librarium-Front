@@ -4,12 +4,14 @@ import '../providers/habits_provider.dart';
 class HabitCard extends StatelessWidget {
   final Habit habit;
   final VoidCallback? onComplete;
+  final VoidCallback? onDelete;
   final bool isCompact;
 
   const HabitCard({
     super.key,
     required this.habit,
     this.onComplete,
+    this.onDelete,
     this.isCompact = false,
   });
 
@@ -80,22 +82,59 @@ class HabitCard extends StatelessWidget {
                 ),
               ),
               
-              // Botão de completar
-              if (onComplete != null)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Color(int.parse(habit.cor.replaceFirst('#', '0xFF'))).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: IconButton(
-                    onPressed: onComplete,
-                    icon: Icon(
-                      Icons.check,
-                      color: Color(int.parse(habit.cor.replaceFirst('#', '0xFF'))),
+              // Botões de ação
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Botão de completar
+                  if (onComplete != null)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Color(int.parse(habit.cor.replaceFirst('#', '0xFF'))).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        onPressed: onComplete,
+                        icon: Icon(
+                          Icons.check,
+                          color: Color(int.parse(habit.cor.replaceFirst('#', '0xFF'))),
+                        ),
+                        iconSize: 20,
+                        tooltip: 'Completar',
+                      ),
                     ),
-                    iconSize: 20,
-                  ),
-                ),
+                  
+                  // Menu de opções
+                  if (onDelete != null) ...[
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_vert,
+                        color: Colors.grey[400],
+                        size: 20,
+                      ),
+                      tooltip: 'Opções',
+                      onSelected: (value) {
+                        if (value == 'delete' && onDelete != null) {
+                          onDelete!();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, color: Colors.red[400], size: 18),
+                              const SizedBox(width: 8),
+                              const Text('Deletar Hábito'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
           

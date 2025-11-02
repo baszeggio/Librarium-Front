@@ -6,6 +6,7 @@ import '../../providers/avatar_provider.dart';
 import '../../providers/habits_provider.dart';
 import '../../providers/achievements_provider.dart';
 import '../../providers/stats_provider.dart';
+import '../../providers/notifications_provider.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/habit_card.dart';
 import '../../widgets/stats_card.dart';
@@ -33,9 +34,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await Future.wait([
       context.read<AvatarProvider>().loadAvatar(),
       context.read<HabitsProvider>().loadHabits(),
-      context.read<AchievementsProvider>().loadAchievements(),
       context.read<StatsProvider>().loadStats(),
+      context.read<NotificationsProvider>().loadUnreadNotifications(),
     ]);
+    
+    // Carregar e verificar conquistas separadamente
+    await context.read<AchievementsProvider>().loadAchievements();
+    await context.read<AchievementsProvider>().verifyAchievements();
   }
 
   @override
@@ -142,67 +147,142 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Bem-vindo, Guerreiro!',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, child) {
+                            final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
+                                              authProvider.user?['nome'] ?? 
+                                              'Guerreiro';
+                            return Text(
+                              'Bem-vindo, $nomeUsuario!',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
                         ),
                         const SizedBox(height: 4),
-                        if (avatarProvider.avatar != null) ...[
-                          Text(
-                            avatarProvider.avatar!.title,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: avatarProvider.avatar!.progressPercentage,
-                            backgroundColor: Colors.grey[800],
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Nível ${avatarProvider.avatar!.nivel} - ${avatarProvider.avatar!.experiencia}/${avatarProvider.avatar!.experienciaProximoNivel} XP',
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ] else ...[
-                          Text(
-                            'Aspirante',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: 0.3,
-                            backgroundColor: Colors.grey[800],
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Nível 1 - 30/100 XP',
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, child) {
+                            // Obter dados reais do usuário
+                            final nivelNum = authProvider.user?['nivel'];
+                            final experienciaNum = authProvider.user?['experiencia'];
+                            final nivel = (nivelNum is int) ? nivelNum : (nivelNum is num) ? nivelNum.toInt() : 1;
+                            final experiencia = (experienciaNum is int) ? experienciaNum : (experienciaNum is num) ? experienciaNum.toInt() : 0;
+                            final titulo = authProvider.user?['titulo'] ?? 'Aspirante';
+                            
+                            // Calcular XP necessário para o próximo nível
+                            // Fórmula: 100 XP por nível até 10, depois aumenta
+                            int xpProximoNivel;
+                            if (nivel <= 10) {
+                              xpProximoNivel = nivel * 100;
+                            } else if (nivel <= 20) {
+                              xpProximoNivel = 1000 + ((nivel - 10) * 200);
+                            } else if (nivel <= 30) {
+                              xpProximoNivel = 3000 + ((nivel - 20) * 300);
+                            } else {
+                              xpProximoNivel = 6000 + ((nivel - 30) * 400);
+                            }
+                            
+                            // XP atual relativo ao nível atual
+                            int xpNivelAnterior;
+                            if (nivel <= 10) {
+                              xpNivelAnterior = (nivel - 1) * 100;
+                            } else if (nivel <= 20) {
+                              xpNivelAnterior = 1000 + ((nivel - 11) * 200);
+                            } else if (nivel <= 30) {
+                              xpNivelAnterior = 3000 + ((nivel - 21) * 300);
+                            } else {
+                              xpNivelAnterior = 6000 + ((nivel - 31) * 400);
+                            }
+                            
+                            final xpRestante = xpProximoNivel - xpNivelAnterior;
+                            final xpAtualNivel = experiencia - xpNivelAnterior;
+                            final progresso = xpRestante > 0 ? xpAtualNivel / xpRestante : 0.0;
+                            
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Título do avatar (usar do avatar se disponível, senão do usuário)
+                                Text(
+                                  avatarProvider.avatar?.title ?? titulo,
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 8),
+                                // Barra de progresso
+                                LinearProgressIndicator(
+                                  value: avatarProvider.avatar?.progressPercentage ?? 
+                                         progresso.clamp(0.0, 1.0),
+                                  backgroundColor: Colors.grey[800],
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                // Texto de nível e XP
+                                Text(
+                                  'Nível ${avatarProvider.avatar?.nivel ?? nivel} - ${avatarProvider.avatar?.experiencia ?? experiencia} XP',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.grey[300],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
               
-              // Botão de perfil
+              // Botões de ação
+              Consumer<NotificationsProvider>(
+                builder: (context, notificationsProvider, child) {
+                  final unreadCount = notificationsProvider.unreadCount;
+                  return Stack(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          context.read<NotificationsProvider>().loadNotifications();
+                          context.go('/notifications');
+                        },
+                        icon: const Icon(Icons.notifications),
+                        color: Colors.white,
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              unreadCount > 9 ? '9+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
               IconButton(
                 onPressed: () => context.go('/profile'),
                 icon: const Icon(Icons.settings),
@@ -363,6 +443,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onComplete: () {
                     habitsProvider.completeHabit(habit.id);
                   },
+                  onDelete: () {
+                    _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);
+                  },
                 ),
               )),
           ],
@@ -446,6 +529,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, String habitId, String habitTitle, HabitsProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: const Text(
+          'Deletar Hábito',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Tem certeza que deseja deletar o hábito "$habitTitle"?\n\nEsta ação não pode ser desfeita.',
+          style: const TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await provider.deleteHabit(habitId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Hábito "$habitTitle" deletado com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erro ao deletar hábito: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Deletar'),
+          ),
+        ],
+      ),
     );
   }
 }

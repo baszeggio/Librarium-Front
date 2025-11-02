@@ -57,17 +57,58 @@ class StatsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final statsData = await ApiService.getStats();
+      // Usar getUserDashboard que retorna estatísticas completas do usuário
+      final dashboardData = await ApiService.getUserDashboard();
       
-      // Aceitar diferentes formatos de resposta
-      if (statsData['sucesso'] == true || statsData['success'] == true || statsData['estatisticas'] != null) {
-        final statsJson = statsData['estatisticas'] ?? statsData['statistics'] ?? statsData['data'] ?? statsData;
-        final Map<String, dynamic> parsed = Map<String, dynamic>.from(statsJson as Map);
-        _stats = Stats.fromJson(parsed);
+      if (dashboardData['sucesso'] == true && dashboardData['dashboard'] != null) {
+        final dashboard = dashboardData['dashboard'];
+        final statsHoje = dashboard['estatisticasHoje'] ?? {};
+        final usuario = dashboard['usuario'] ?? {};
+        final sequencia = usuario['sequencia'] ?? {};
+        
+        // Mapear os campos do backend para o modelo Stats
+        _stats = Stats(
+          totalHabits: statsHoje['totalHabitos'] ?? 
+                      (dashboard['habitos'] as List?)?.length ?? 0,
+          completedHabits: statsHoje['habitosConcluidos'] ?? 0,
+          currentStreak: sequencia['atual'] ?? 0,
+          longestStreak: sequencia['maiorSequencia'] ?? 0,
+          completionRate: (statsHoje['porcentagemConclusao'] ?? 0.0) / 100.0,
+          totalXP: usuario['experiencia'] ?? 0,
+          level: usuario['nivel'] ?? 1,
+          categoryStats: {}, // Será preenchido se necessário
+          weeklyData: [],
+          monthlyData: [],
+        );
       } else {
-        throw Exception(statsData['mensagem'] ?? statsData['message'] ?? 'Erro ao carregar estatísticas');
+        // Fallback: criar stats vazias se não conseguir carregar
+        _stats = Stats(
+          totalHabits: 0,
+          completedHabits: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          completionRate: 0.0,
+          totalXP: 0,
+          level: 1,
+          categoryStats: {},
+          weeklyData: [],
+          monthlyData: [],
+        );
       }
     } catch (e) {
+      // Fallback em caso de erro - não usar dados mock
+      _stats = Stats(
+        totalHabits: 0,
+        completedHabits: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        completionRate: 0.0,
+        totalXP: 0,
+        level: 1,
+        categoryStats: {},
+        weeklyData: [],
+        monthlyData: [],
+      );
       _error = e.toString();
     } finally {
       _isLoading = false;

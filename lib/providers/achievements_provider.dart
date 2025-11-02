@@ -25,56 +25,18 @@ class Achievement {
   });
 
   factory Achievement.fromJson(Map<String, dynamic> json) {
-    // MongoDB retorna _id como ObjectId, que pode vir como string ou objeto
-    String getId() {
-      if (json['_id'] != null) {
-        if (json['_id'] is String) {
-          return json['_id'];
-        } else if (json['_id'] is Map && json['_id']['\$oid'] != null) {
-          return json['_id']['\$oid'];
-        } else {
-          return json['_id'].toString();
-        }
-      }
-      return json['id']?.toString() ?? '';
-    }
-
-    // Tratamento de data do MongoDB
-    DateTime? parseDate(dynamic dateValue) {
-      if (dateValue == null) return null;
-      if (dateValue is DateTime) return dateValue;
-      if (dateValue is String) {
-        try {
-          return DateTime.parse(dateValue);
-        } catch (e) {
-          return null;
-        }
-      }
-      if (dateValue is Map && dateValue['\$date'] != null) {
-        final dateStr = dateValue['\$date'];
-        if (dateStr is String) {
-          try {
-            return DateTime.parse(dateStr);
-          } catch (e) {
-            return null;
-          }
-        } else if (dateStr is int) {
-          return DateTime.fromMillisecondsSinceEpoch(dateStr);
-        }
-      }
-      return null;
-    }
-
     return Achievement(
-      id: getId(),
-      tipo: json['tipo'] ?? json['type'] ?? '',
-      titulo: json['titulo'] ?? json['title'] ?? '',
-      descricao: json['descricao'] ?? json['description'] ?? '',
-      raridade: json['raridade'] ?? json['rarity'] ?? 'comum',
-      recompensaXP: json['recompensaXP'] ?? json['rewardXP'] ?? json['xp'] ?? 0,
-      desbloqueada: json['desbloqueada'] ?? json['unlocked'] ?? false,
-      dataDesbloqueio: parseDate(json['dataDesbloqueio'] ?? json['unlockedAt']),
-      icone: json['icone'] ?? json['icon'] ?? 'trophy',
+      id: json['_id'] ?? json['id'] ?? '',
+      tipo: json['tipo'] ?? '',
+      titulo: json['titulo'] ?? '',
+      descricao: json['descricao'] ?? '',
+      raridade: json['raridade'] ?? 'comum',
+      recompensaXP: json['recompensaXP'] ?? 0,
+      desbloqueada: json['desbloqueada'] ?? false,
+      dataDesbloqueio: json['dataDesbloqueio'] != null 
+          ? DateTime.parse(json['dataDesbloqueio']) 
+          : null,
+      icone: json['icone'] ?? 'trophy',
     );
   }
 
@@ -135,23 +97,133 @@ class AchievementsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Tentar buscar conquistas da API
       final achievementsData = await ApiService.getAchievements();
-      _achievements = achievementsData.map((achievementJson) {
-        final Map<String, dynamic> parsed = Map<String, dynamic>.from(achievementJson as Map);
-        return Achievement.fromJson(parsed);
-      }).toList();
-      _error = null;
+      if (achievementsData.isNotEmpty) {
+        _achievements = achievementsData
+            .map((achievementJson) => Achievement.fromJson(achievementJson))
+            .toList();
+      } else {
+        // Se não houver conquistas na API, usar dados mockados
+        _achievements = _getMockAchievements();
+      }
     } catch (e) {
-      _achievements = [];
-      _error = e.toString();
+      // Se houver erro, usar dados mockados como fallback
+      _achievements = _getMockAchievements();
+      print('Erro ao carregar conquistas da API, usando dados mockados: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Adiciona uma conquista personalizada localmente
-  void addCustomAchievement({
+  Future<void> verifyAchievements() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.verifyAchievements();
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Recarregar conquistas após verificação para mostrar as desbloqueadas
+        await loadAchievements();
+      }
+    } catch (e) {
+      _error = e.toString();
+      // Não interromper o fluxo se a verificação falhar
+      print('Erro ao verificar conquistas: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadAchievementsByCategory(String category) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final achievementsData = await ApiService.getAchievementsByCategory(category);
+      if (achievementsData.isNotEmpty) {
+        _achievements = achievementsData
+            .map((achievementJson) => Achievement.fromJson(achievementJson))
+            .toList();
+      } else {
+        _achievements = [];
+      }
+    } catch (e) {
+      _error = e.toString();
+      _achievements = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadAchievementsByRarity(String rarity) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final achievementsData = await ApiService.getAchievementsByRarity(rarity);
+      if (achievementsData.isNotEmpty) {
+        _achievements = achievementsData
+            .map((achievementJson) => Achievement.fromJson(achievementJson))
+            .toList();
+      } else {
+        _achievements = [];
+      }
+    } catch (e) {
+      _error = e.toString();
+      _achievements = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createCustomAchievement({
+    required String titulo,
+    required String descricao,
+    required String raridade,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.createCustomAchievement({
+        'titulo': titulo,
+        'descricao': descricao,
+        'raridade': raridade.toLowerCase(),
+      });
+
+      if (response['sucesso'] == true) {
+        await loadAchievements();
+      } else {
+        throw Exception(response['mensagem'] ?? 'Erro ao criar conquista');
+      }
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> markAchievementAsRead(String achievementId) async {
+    try {
+      await ApiService.markAchievementAsRead(achievementId);
+      await loadAchievements();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  // Adiciona uma conquista personalizada localmente (fallback offline)
+  void addCustomAchievementLocal({
     required String titulo,
     required String descricao,
     required String raridade,
@@ -231,10 +303,30 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '3',
         tipo: 'categoria_saude',
-        titulo: 'Vitality',
+        titulo: 'Fragile Strength',
         descricao: 'Complete 5 hábitos de saúde',
         raridade: 'comum',
         recompensaXP: 100,
+        desbloqueada: false,
+        icone: 'assets/green_award.png',
+      ),
+      Achievement(
+        id: '13',
+        tipo: 'primeira_semana',
+        titulo: 'Path of Pain',
+        descricao: 'Complete sua primeira semana de hábitos',
+        raridade: 'comum',
+        recompensaXP: 125,
+        desbloqueada: false,
+        icone: 'assets/green_award.png',
+      ),
+      Achievement(
+        id: '14',
+        tipo: 'explorador',
+        titulo: 'Explorer',
+        descricao: 'Crie hábitos em 3 categorias diferentes',
+        raridade: 'comum',
+        recompensaXP: 150,
         desbloqueada: false,
         icone: 'assets/green_award.png',
       ),
@@ -243,7 +335,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '4',
         tipo: 'sequencia_7',
-        titulo: 'Golden Week',
+        titulo: 'Pure Nail',
         descricao: 'Mantenha uma sequência de 7 dias',
         raridade: 'raro',
         recompensaXP: 200,
@@ -254,7 +346,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '5',
         tipo: 'perfeccionista',
-        titulo: 'Pure Nail',
+        titulo: 'Perfect Completion',
         descricao: 'Complete 10 hábitos com 100% de eficiência',
         raridade: 'raro',
         recompensaXP: 300,
@@ -264,10 +356,30 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '6',
         tipo: 'guerreiro',
-        titulo: 'Warrior\'s Path',
+        titulo: 'Soul Warrior',
         descricao: 'Complete 20 hábitos difíceis',
         raridade: 'raro',
         recompensaXP: 400,
+        desbloqueada: false,
+        icone: 'assets/red_award.png',
+      ),
+      Achievement(
+        id: '15',
+        tipo: 'metamorfose',
+        titulo: 'Metamorphosis',
+        descricao: 'Evolua seu avatar pela primeira vez',
+        raridade: 'raro',
+        recompensaXP: 350,
+        desbloqueada: false,
+        icone: 'assets/red_award.png',
+      ),
+      Achievement(
+        id: '16',
+        tipo: 'colecionador',
+        titulo: 'Collector',
+        descricao: 'Desbloqueie 5 conquistas diferentes',
+        raridade: 'raro',
+        recompensaXP: 450,
         desbloqueada: false,
         icone: 'assets/red_award.png',
       ),
@@ -276,7 +388,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '7',
         tipo: 'sequencia_30',
-        titulo: 'Master of Discipline',
+        titulo: 'Steel Soul',
         descricao: 'Mantenha uma sequência de 30 dias',
         raridade: 'epico',
         recompensaXP: 500,
@@ -286,7 +398,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '8',
         tipo: 'lendario',
-        titulo: 'Living Legend',
+        titulo: 'Void Heart',
         descricao: 'Alcance o nível 50',
         raridade: 'epico',
         recompensaXP: 1000,
@@ -296,10 +408,30 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '9',
         tipo: 'conquistador',
-        titulo: 'Conqueror',
+        titulo: 'True Completion',
         descricao: 'Desbloqueie todas as conquistas comuns',
         raridade: 'epico',
         recompensaXP: 750,
+        desbloqueada: false,
+        icone: 'assets/gold_award.png',
+      ),
+      Achievement(
+        id: '17',
+        tipo: 'mestre',
+        titulo: 'Master of Habits',
+        descricao: 'Complete 100 hábitos no total',
+        raridade: 'epico',
+        recompensaXP: 1500,
+        desbloqueada: false,
+        icone: 'assets/gold_award.png',
+      ),
+      Achievement(
+        id: '18',
+        tipo: 'perfeito',
+        titulo: 'Perfect Run',
+        descricao: 'Mantenha 100% de eficiência por 30 dias',
+        raridade: 'epico',
+        recompensaXP: 2000,
         desbloqueada: false,
         icone: 'assets/gold_award.png',
       ),
@@ -308,7 +440,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '10',
         tipo: 'sequencia_100',
-        titulo: 'Emperor of Persistence',
+        titulo: 'The Radiance',
         descricao: 'Mantenha uma sequência de 100 dias',
         raridade: 'lendario',
         recompensaXP: 2000,
@@ -318,7 +450,7 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '11',
         tipo: 'deus_habitos',
-        titulo: 'God of Habits',
+        titulo: 'The Hollow Knight',
         descricao: 'Complete 1000 hábitos no total',
         raridade: 'lendario',
         recompensaXP: 5000,
@@ -328,10 +460,30 @@ class AchievementsProvider extends ChangeNotifier {
       Achievement(
         id: '12',
         tipo: 'lenda_absoluta',
-        titulo: 'Absolute Legend',
+        titulo: 'Sealed Siblings',
         descricao: 'Desbloqueie todas as conquistas do jogo',
         raridade: 'lendario',
         recompensaXP: 10000,
+        desbloqueada: false,
+        icone: 'assets/king_award.png',
+      ),
+      Achievement(
+        id: '19',
+        tipo: 'perfeicao_absoluta',
+        titulo: 'Pantheon of Hallownest',
+        descricao: 'Complete todos os hábitos com 100% de eficiência',
+        raridade: 'lendario',
+        recompensaXP: 7500,
+        desbloqueada: false,
+        icone: 'assets/king_award.png',
+      ),
+      Achievement(
+        id: '20',
+        tipo: 'lendario_verdadeiro',
+        titulo: 'Godmaster',
+        descricao: 'Alcance o nível máximo (100)',
+        raridade: 'lendario',
+        recompensaXP: 15000,
         desbloqueada: false,
         icone: 'assets/king_award.png',
       ),
