@@ -83,10 +83,6 @@ class NotificationsProvider extends ChangeNotifier {
   /// Se o endpoint não existir (404),
   /// ignora o erro silenciosamente (conforme /api/notificacoes/nao-lidas pode não existir).
   Future<void> loadUnreadNotifications() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
       final notificationsData = await ApiService.getUnreadNotifications();
       final unread = notificationsData
@@ -94,25 +90,25 @@ class NotificationsProvider extends ChangeNotifier {
           .toList();
       
       // Adicionar notificações não lidas à lista completa se não existiam ainda
+      bool hasNewNotifications = false;
       for (final notification in unread) {
         if (!_notifications.any((n) => n.id == notification.id)) {
           _notifications.add(notification);
+          hasNewNotifications = true;
         }
       }
-    } catch (e) {
-      // Se for um 404 (not found) do endpoint, ignora, não mostra erro ao usuário.
-      // No log interno pode aparecer:
-      if (e is Exception && e.toString().contains('404')) {
-        // Opcionalmente, log
-        // debugPrint('Endpoint de notificações não lidas não encontrado: $e');
-      } else {
-        // Outros erros são apenas logados, não propagados ao usuário
-        // debugPrint('Erro inesperado ao buscar notificações não lidas: $e');
+      
+      if (hasNewNotifications || notificationsData.isNotEmpty) {
+        notifyListeners();
       }
-      // Não define _error.
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    } catch (e) {
+      // Endpoint não existe - tratar silenciosamente, não mostrar erro
+      // Tentar carregar todas as notificações como fallback
+      try {
+        await loadNotifications();
+      } catch (loadError) {
+        print('Erro ao carregar notificações: $loadError');
+      }
     }
   }
 

@@ -19,26 +19,48 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Limpar dados antigos antes de tentar login
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      await prefs.remove('user');
+      
       final response = await ApiService.login(email, senha);
       
-      if (response['sucesso'] == true) {
+      // Verificar tanto 'sucesso' quanto 'success'
+      final sucesso = response['sucesso'] == true || response['success'] == true;
+      
+      if (sucesso) {
         _token = response['token'];
-        _user = response['usuario'];
+        _user = response['usuario'] ?? response['user'];
         _isAuthenticated = true;
         
         // Salvar token no SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', _token!);
-        if (response['usuario'] != null) {
-          await prefs.setString('user', jsonEncode(response['usuario']));
+        if (_token != null) {
+          await prefs.setString('token', _token!);
+        }
+        if (_user != null) {
+          await prefs.setString('user', jsonEncode(_user));
         }
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao fazer login');
+        final errorMsg = response['mensagem'] ?? 
+                        response['message'] ?? 
+                        response['erro'] ??
+                        response['error'] ??
+                        'Erro ao fazer login';
+        throw Exception(errorMsg);
       }
     } catch (e) {
       _isAuthenticated = false;
       _user = null;
       _token = null;
+      
+      // Garantir que dados estão limpos
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('token');
+        await prefs.remove('user');
+      } catch (_) {}
+      
       rethrow;
     } finally {
       _isLoading = false;
@@ -51,26 +73,48 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Limpar dados antigos antes de tentar registrar
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      await prefs.remove('user');
+      
       final response = await ApiService.register(nomeUsuario, email, senha);
       
-      if (response['sucesso'] == true) {
+      // Verificar tanto 'sucesso' quanto 'success'
+      final sucesso = response['sucesso'] == true || response['success'] == true;
+      
+      if (sucesso) {
         _token = response['token'];
-        _user = response['usuario'];
+        _user = response['usuario'] ?? response['user'];
         _isAuthenticated = true;
         
         // Salvar token no SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', _token!);
-        if (response['usuario'] != null) {
-          await prefs.setString('user', jsonEncode(response['usuario']));
+        if (_token != null) {
+          await prefs.setString('token', _token!);
+        }
+        if (_user != null) {
+          await prefs.setString('user', jsonEncode(_user));
         }
       } else {
-        throw Exception(response['mensagem'] ?? 'Erro ao registrar');
+        final errorMsg = response['mensagem'] ?? 
+                        response['message'] ?? 
+                        response['erro'] ??
+                        response['error'] ??
+                        'Erro ao registrar';
+        throw Exception(errorMsg);
       }
     } catch (e) {
       _isAuthenticated = false;
       _user = null;
       _token = null;
+      
+      // Garantir que dados estão limpos
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('token');
+        await prefs.remove('user');
+      } catch (_) {}
+      
       rethrow;
     } finally {
       _isLoading = false;
@@ -108,14 +152,15 @@ class AuthProvider extends ChangeNotifier {
         // Verificar se o token ainda é válido fazendo uma chamada ao servidor
         try {
           final userData = await ApiService.getProfile();
-          if (userData['sucesso'] == true && userData['usuario'] != null) {
-            _user = userData['usuario'];
+          final sucesso = userData['sucesso'] == true || userData['success'] == true;
+          final usuario = userData['usuario'] ?? userData['user'];
+          
+          if (sucesso && usuario != null) {
+            _user = usuario;
             _isAuthenticated = true;
             
             // Atualizar dados do usuário no SharedPreferences
-            if (userData['usuario'] != null) {
-              await prefs.setString('user', jsonEncode(userData['usuario']));
-            }
+            await prefs.setString('user', jsonEncode(usuario));
           } else {
             // Token inválido, limpar dados
             await logout();

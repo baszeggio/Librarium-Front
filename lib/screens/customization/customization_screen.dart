@@ -107,9 +107,9 @@ class _CustomizationScreenState extends State<CustomizationScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -206,8 +206,8 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                             return Container(
                                               width: 200,
                                               height: 200,
-                                              color: Colors.grey[800],
-                                              child: Icon(Icons.error, color: Colors.grey[600], size: 40),
+                                              color: const Color(0xFF14181C),
+                                              child: Icon(Icons.error, color: Colors.grey[500], size: 40),
                                             );
                                           }
                                           
@@ -301,7 +301,7 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                                 decoration: BoxDecoration(
                                   color: isSelected 
                                       ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
-                                      : Colors.grey[800],
+                                      : const Color(0xFF14181C),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected 
@@ -382,13 +382,15 @@ class _CustomizationScreenState extends State<CustomizationScreen>
       
       // Criar objeto de customização correto para a API
       final currentAvatar = avatarProvider.avatar;
+      
+      // Definir head baseado na cor escolhida (blue -> blue_head, green -> green_head, etc)
+      final headKey = '${_selectedColor}_head';
+      
       final customization = {
         'personalizacaoAvatar': {
           'tema': _selectedColor,
           'bodyColor': _selectedColor,
-          // Preservar head existente se houver
-          if (currentAvatar != null && currentAvatar.equipamentos['head'] != null)
-            'head': currentAvatar.equipamentos['head']!,
+          'head': headKey, // Atualizar head baseado na cor escolhida
         }
       };
       

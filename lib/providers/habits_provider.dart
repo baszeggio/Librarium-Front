@@ -102,11 +102,20 @@ class HabitsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Mapear categoria 'casa' para valor aceito pelo backend
+      // O backend pode não aceitar 'casa', então mapeamos para 'geral' ou outro valor válido
+      String categoriaMapeada = categoria;
+      if (categoria == 'casa') {
+        // Se o backend não aceita 'casa', usar 'geral' ou verificar valores válidos
+        // Valores válidos comuns: 'geral', 'saude', 'estudo', 'trabalho', 'social'
+        categoriaMapeada = 'geral'; // Fallback temporário
+      }
+      
       final habitData = {
         'titulo': titulo,
         'descricao': descricao,
         'frequencia': frequencia,
-        'categoria': categoria,
+        'categoria': categoriaMapeada,
         'dificuldade': dificuldade,
         'icone': icone,
         'cor': cor,
@@ -118,13 +127,11 @@ class HabitsProvider extends ChangeNotifier {
         // Recarregar hábitos para incluir o novo
         await loadHabits();
         
-        // Verificar conquistas automaticamente após criar hábito
-        try {
-          await ApiService.verifyAchievements();
-        } catch (e) {
-          // Silenciar erro se a verificação falhar
-          print('Erro ao verificar conquistas: $e');
-        }
+        // Aguardar um pouco para garantir que o backend processou
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // Verificar conquistas será feito pela tela que cria o hábito
+        // para garantir que as conquistas sejam recarregadas corretamente
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao criar hábito');
       }
@@ -172,16 +179,17 @@ class HabitsProvider extends ChangeNotifier {
       final response = await ApiService.completeHabit(habitId);
       
       if (response['sucesso'] == true || response['success'] == true) {
-        // Recarregar hábitos para obter dados atualizados
+        // Recarregar hábitos para obter dados atualizados com streak atualizado
         await loadHabits();
         
-        // Verificar conquistas automaticamente após completar hábito
-        try {
-          await ApiService.verifyAchievements();
-        } catch (e) {
-          // Silenciar erro se a verificação falhar
-          print('Erro ao verificar conquistas: $e');
-        }
+        // Aguardar um pouco para garantir que o backend processou
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // Recarregar novamente para garantir dados atualizados
+        await loadHabits();
+        
+        // A verificação de conquistas será feita pelas telas que chamam completeHabit
+        // para garantir que as conquistas sejam recarregadas corretamente
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao completar hábito');
       }

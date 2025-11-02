@@ -30,9 +30,9 @@ class _StatsScreenState extends State<StatsScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -136,7 +136,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 // Botão de refresh
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey[800],
+                    color: const Color(0xFF14181C),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: IconButton(
@@ -151,6 +151,11 @@ class _StatsScreenState extends State<StatsScreen> {
               ],
             ),
           ),
+
+          const SizedBox(height: 24),
+
+          // Sequência em destaque no topo (MAIOR E MAIS VISÍVEL)
+          _buildProminentStreakCards(stats),
 
           const SizedBox(height: 24),
 
@@ -176,6 +181,132 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  Widget _buildProminentStreakCards(Stats stats) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Sequência',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.orange.withOpacity(0.3),
+                      Colors.deepOrange.withOpacity(0.2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.orange.withOpacity(0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.local_fire_department,
+                      size: 48,
+                      color: Colors.orange,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '${stats.currentStreak}',
+                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 42,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Sequência Atual',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'dias consecutivos',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[400],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.red.withOpacity(0.3),
+                      Colors.red.shade900.withOpacity(0.2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.whatshot,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '${stats.longestStreak}',
+                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 42,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Maior Sequência',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'dias consecutivos',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[400],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildMainStatsCards(Stats stats) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,30 +319,6 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: StatsCard(
-                title: 'Sequência Atual',
-                value: '${stats.currentStreak}',
-                icon: Icons.local_fire_department,
-                color: Colors.orange,
-                subtitle: 'dias consecutivos',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: StatsCard(
-                title: 'Maior Sequência',
-                value: '${stats.longestStreak}',
-                icon: Icons.whatshot,
-                color: Colors.red,
-                subtitle: 'dias consecutivos',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -264,7 +371,7 @@ class _StatsScreenState extends State<StatsScreen> {
           Container(
             height: 200,
             decoration: BoxDecoration(
-              color: Colors.grey[900],
+              color: const Color(0xFF0A0E12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(

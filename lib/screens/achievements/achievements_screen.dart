@@ -29,9 +29,9 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -357,7 +357,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           const SizedBox(height: 16),
           LinearProgressIndicator(
             value: achievementsProvider.completionPercentage,
-            backgroundColor: Colors.grey[800],
+            backgroundColor: const Color(0xFF14181C),
             valueColor: AlwaysStoppedAnimation<Color>(
               Theme.of(context).colorScheme.primary,
             ),

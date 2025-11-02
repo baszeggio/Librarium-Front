@@ -99,10 +99,19 @@ class AchievementsProvider extends ChangeNotifier {
     try {
       // Tentar buscar conquistas da API
       final achievementsData = await ApiService.getAchievements();
-      if (achievementsData.isNotEmpty) {
+      if (achievementsData.isNotEmpty && achievementsData is List) {
+        // Salvar número anterior de conquistas desbloqueadas
+        final previousUnlockedCount = unlockedCount;
+        
         _achievements = achievementsData
             .map((achievementJson) => Achievement.fromJson(achievementJson))
             .toList();
+        
+        // Verificar se há novas conquistas desbloqueadas
+        final currentUnlockedCount = unlockedCount;
+        if (currentUnlockedCount > previousUnlockedCount) {
+          print('${currentUnlockedCount - previousUnlockedCount} nova(s) conquista(s) desbloqueada(s)!');
+        }
       } else {
         // Se não houver conquistas na API, usar dados mockados
         _achievements = _getMockAchievements();
@@ -118,22 +127,35 @@ class AchievementsProvider extends ChangeNotifier {
   }
 
   Future<void> verifyAchievements() async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
       final response = await ApiService.verifyAchievements();
       if (response['sucesso'] == true || response['success'] == true) {
+        // Aguardar um pouco para garantir que o backend processou as conquistas
+        await Future.delayed(const Duration(milliseconds: 300));
         // Recarregar conquistas após verificação para mostrar as desbloqueadas
         await loadAchievements();
+        
+        // Verificar se há conquistas recém-desbloqueadas para notificar o usuário
+        final novasDesbloqueadas = _achievements.where((a) => 
+          a.desbloqueada && 
+          a.dataDesbloqueio != null && 
+          a.dataDesbloqueio!.isAfter(DateTime.now().subtract(const Duration(seconds: 5)))
+        ).toList();
+        
+        if (novasDesbloqueadas.isNotEmpty) {
+          print('${novasDesbloqueadas.length} nova(s) conquista(s) desbloqueada(s)!');
+        }
       }
     } catch (e) {
       _error = e.toString();
       // Não interromper o fluxo se a verificação falhar
       print('Erro ao verificar conquistas: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      // Mesmo com erro, tentar recarregar conquistas para mostrar estado atual
+      try {
+        await loadAchievements();
+      } catch (loadError) {
+        print('Erro ao recarregar conquistas após verificação: $loadError');
+      }
     }
   }
 

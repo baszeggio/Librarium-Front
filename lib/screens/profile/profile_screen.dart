@@ -33,9 +33,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -121,30 +121,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: Column(
             children: [
-              // Avatar (toque para escolher cabeça)
-              GestureDetector(
-                onTap: () => _showHeadPicker(context),
-                child: AvatarWidget(
-                  avatar: avatarProvider.avatar,
-                  size: 100,
-                  showLevel: true,
-                ),
+              // Avatar (foto baseada na cor escolhida na customização)
+              AvatarWidget(
+                avatar: avatarProvider.avatar,
+                size: 100,
+                showLevel: true,
               ),
               
               const SizedBox(height: 20),
               
-              // Nome do usuário
+              // Nome do usuário com ID
               Consumer<AuthProvider>(
                 builder: (context, authProvider, child) {
                   final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
                                     authProvider.user?['nome'] ?? 
                                     'Guerreiro';
-                  return Text(
-                    nomeUsuario,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  final userId = authProvider.user?['_id']?.toString() ?? 
+                               authProvider.user?['id']?.toString() ?? '';
+                  final shortId = userId.length > 8 ? userId.substring(0, 8) : userId;
+                  
+                  return Column(
+                    children: [
+                      Text(
+                        nomeUsuario,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (shortId.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '#$shortId',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[400],
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -182,105 +197,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showHeadPicker(BuildContext context) {
-    final Map<String, String> headAssets = const {
-      'red_head': 'assets/red_head.png',
-      'blue_head': 'assets/blue_head.png',
-      'purple_head': 'assets/purple_head.png',
-      'brown_head': 'assets/brown_head.png',
-      'green_head': 'assets/green_head.png',
-    };
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Escolha sua cabeça',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: headAssets.length,
-                itemBuilder: (context, index) {
-                  final String key = headAssets.keys.elementAt(index);
-                  final String asset = headAssets[key]!;
-                  return InkWell(
-                    onTap: () async {
-                      try {
-                        final avatarProvider = context.read<AvatarProvider>();
-                        await avatarProvider.setHead(key);
-                        
-                        // Aguardar um pouco para garantir que o estado foi atualizado
-                        await Future.delayed(const Duration(milliseconds: 100));
-                        
-                        // Forçar recarregamento do avatar
-                        await avatarProvider.loadAvatar();
-                        
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Foto de perfil atualizada!'),
-                              backgroundColor: Colors.green,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Erro ao atualizar: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Image.asset(
-                          asset,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildAvatarStats() {
     return Consumer<AvatarProvider>(
@@ -362,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
                     value: avatar.progressPercentage,
-                    backgroundColor: Colors.grey[800],
+                    backgroundColor: const Color(0xFF14181C),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       Theme.of(context).colorScheme.primary,
                     ),
@@ -381,6 +297,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
                 ...avatar.equipamentos.entries.map((entry) {
+                  // Limitar tamanho do texto para evitar overflow
+                  String valueStr = entry.value.toString();
+                  if (valueStr.length > 30) {
+                    valueStr = '${valueStr.substring(0, 27)}...';
+                  }
+                  
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
@@ -391,10 +313,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Colors.grey[400],
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          '${_getEquipmentName(entry.key)}: ${entry.value}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[400],
+                        Expanded(
+                          child: Text(
+                            '${_getEquipmentName(entry.key)}: $valueStr',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[400],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
                       ],

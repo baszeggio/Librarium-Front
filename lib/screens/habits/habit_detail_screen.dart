@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/habits_provider.dart';
+import '../../providers/achievements_provider.dart';
 import '../../widgets/custom_button.dart';
 import 'edit_habit_screen.dart';
 
@@ -92,9 +93,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -213,16 +214,23 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                           // Ação rápida
                           CustomButton(
                             text: 'Marcar como Concluído',
-                            onPressed: () {
-                              habitsProvider.completeHabit(habit.id).then((_) {
-                                _loadProgress();
+                            onPressed: () async {
+                              await habitsProvider.completeHabit(habit.id);
+                              // Verificar e recarregar conquistas
+                              try {
+                                await context.read<AchievementsProvider>().verifyAchievements();
+                              } catch (e) {
+                                print('Erro ao verificar conquistas: $e');
+                              }
+                              _loadProgress();
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Hábito concluído! +XP ganho!'),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
-                              });
+                              }
                             },
                             width: double.infinity,
                           ),

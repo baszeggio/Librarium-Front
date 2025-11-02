@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/habits_provider.dart';
+import '../../providers/achievements_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -65,23 +66,35 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             icone: _selectedIcon,
             cor: _selectedColor,
           );
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Sem conexão com a API. Exemplo local criado.'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Sem conexão com a API. Exemplo local criado.'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         } else {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          // Verificar e recarregar conquistas após criar hábito com sucesso
+          try {
+            final achievementsProvider = context.read<AchievementsProvider>();
+            await achievementsProvider.verifyAchievements();
+          } catch (e) {
+            print('Erro ao verificar conquistas após criar hábito: $e');
+          }
+          
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Hábito "${_titleController.text.trim()}" criado com sucesso!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
     } catch (e) {
@@ -106,9 +119,9 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
