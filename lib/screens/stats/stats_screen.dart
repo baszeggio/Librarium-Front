@@ -30,9 +30,9 @@ class _StatsScreenState extends State<StatsScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -136,7 +136,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 // Botão de refresh
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey[800],
+                    color: const Color(0xFF14181C),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: IconButton(
@@ -371,7 +371,7 @@ class _StatsScreenState extends State<StatsScreen> {
           Container(
             height: 200,
             decoration: BoxDecoration(
-              color: Colors.grey[900],
+              color: const Color(0xFF0A0E12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(

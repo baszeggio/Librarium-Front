@@ -193,7 +193,7 @@ class HabitCard extends StatelessWidget {
                   value: habit.maiorSequencia > 0 
                       ? habit.sequenciaAtual / habit.maiorSequencia 
                       : 0,
-                  backgroundColor: Colors.grey[800],
+                  backgroundColor: const Color(0xFF14181C),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     Color(int.parse(habit.cor.replaceFirst('#', '0xFF'))),
                   ),
@@ -210,7 +210,7 @@ class HabitCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey[800],
+        color: const Color(0xFF14181C),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

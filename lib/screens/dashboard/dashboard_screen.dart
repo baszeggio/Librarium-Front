@@ -41,6 +41,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Carregar e verificar conquistas separadamente
     await context.read<AchievementsProvider>().loadAchievements();
     await context.read<AchievementsProvider>().verifyAchievements();
+    
+    // Recarregar notificações após verificar conquistas (pode haver novas notificações)
+    await context.read<NotificationsProvider>().loadNotifications();
   }
 
   @override
@@ -52,9 +55,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -152,13 +155,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
                                               authProvider.user?['nome'] ?? 
                                               'Guerreiro';
-                            return Text(
-                              'Bem-vindo, $nomeUsuario!',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            final userId = authProvider.user?['_id']?.toString() ?? 
+                                         authProvider.user?['id']?.toString() ?? '';
+                            final shortId = userId.length > 8 ? userId.substring(0, 8) : userId;
+                            
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bem-vindo, $nomeUsuario!',
+                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (shortId.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '#$shortId',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.grey[400],
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             );
                           },
                         ),
@@ -218,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 LinearProgressIndicator(
                                   value: avatarProvider.avatar?.progressPercentage ?? 
                                          progresso.clamp(0.0, 1.0),
-                                  backgroundColor: Colors.grey[800],
+                                  backgroundColor: const Color(0xFF14181C),
                                   valueColor: AlwaysStoppedAnimation<Color>(
                                     Theme.of(context).colorScheme.primary,
                                   ),
@@ -446,6 +469,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     await context.read<StatsProvider>().loadStats();
                     // Recarregar avatar também
                     await context.read<AvatarProvider>().loadAvatar();
+                    // Verificar e recarregar conquistas
+                    try {
+                      await context.read<AchievementsProvider>().verifyAchievements();
+                    } catch (e) {
+                      print('Erro ao verificar conquistas: $e');
+                    }
                   },
                   onDelete: () {
                     _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);

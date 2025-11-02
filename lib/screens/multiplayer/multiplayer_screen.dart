@@ -45,9 +45,9 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -215,7 +215,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                           return Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.grey[900],
+                              color: const Color(0xFF0A0E12),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.red.withOpacity(0.2)),
                             ),
@@ -283,7 +283,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                               onPressed: () {
                                 multiplayerProvider.loadBattles();
                               },
-                              backgroundColor: Colors.grey[800],
+                              backgroundColor: const Color(0xFF14181C),
                             ),
                           ),
                         ],
@@ -677,7 +677,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey[850],
+        color: const Color(0xFF0F1317),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),

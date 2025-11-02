@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/habits_provider.dart';
+import '../../providers/achievements_provider.dart';
 import '../../widgets/habit_card.dart';
 import '../../widgets/custom_button.dart';
 import 'create_habit_screen.dart';
@@ -33,9 +34,9 @@ class _HabitsScreenState extends State<HabitsScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -220,8 +221,14 @@ class _HabitsScreenState extends State<HabitsScreen> {
                         },
                         child: HabitCard(
                           habit: habit,
-                          onComplete: () {
-                            habitsProvider.completeHabit(habit.id);
+                          onComplete: () async {
+                            await habitsProvider.completeHabit(habit.id);
+                            // Verificar e recarregar conquistas
+                            try {
+                              await context.read<AchievementsProvider>().verifyAchievements();
+                            } catch (e) {
+                              print('Erro ao verificar conquistas: $e');
+                            }
                           },
                           onDelete: () {
                             _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);

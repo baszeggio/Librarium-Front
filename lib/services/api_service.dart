@@ -24,21 +24,71 @@ class ApiService {
 
   // ========== AUTH ENDPOINTS ==========
   static Future<Map<String, dynamic>> login(String email, String senha) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: await _getHeaders(requiresAuth: false),
-      body: jsonEncode({'email': email, 'senha': senha}),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login'),
+        headers: await _getHeaders(requiresAuth: false),
+        body: jsonEncode({'email': email, 'senha': senha}),
+      );
+      
+      final responseBody = response.body;
+      if (responseBody.isEmpty) {
+        throw Exception('Resposta vazia do servidor');
+      }
+      
+      final decodedResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+      
+      // Se o status code não for 200-299, tratar como erro
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao fazer login (Status: ${response.statusCode})';
+        throw Exception(errorMsg);
+      }
+      
+      return decodedResponse;
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> register(String nomeUsuario, String email, String senha) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/registrar'),
-      headers: await _getHeaders(requiresAuth: false),
-      body: jsonEncode({'nomeUsuario': nomeUsuario, 'email': email, 'senha': senha}),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/registrar'),
+        headers: await _getHeaders(requiresAuth: false),
+        body: jsonEncode({'nomeUsuario': nomeUsuario, 'email': email, 'senha': senha}),
+      );
+      
+      final responseBody = response.body;
+      if (responseBody.isEmpty) {
+        throw Exception('Resposta vazia do servidor');
+      }
+      
+      final decodedResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+      
+      // Se o status code não for 200-299, tratar como erro
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao registrar (Status: ${response.statusCode})';
+        throw Exception(errorMsg);
+      }
+      
+      return decodedResponse;
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getProfile() async {

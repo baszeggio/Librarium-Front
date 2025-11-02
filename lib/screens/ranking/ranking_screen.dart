@@ -86,9 +86,9 @@ class _RankingScreenState extends State<RankingScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF21262D),
+              Color(0xFF050709),
+              Color(0xFF0A0E12),
+              Color(0xFF14181C),
             ],
           ),
         ),
@@ -217,12 +217,19 @@ class _RankingScreenState extends State<RankingScreen> {
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                player['nomeUsuario'] ?? 'Jogador',
-                                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      '${player['nomeUsuario'] ?? 'Jogador'}${player['_id'] != null ? ' #${player['_id'].toString().length > 8 ? player['_id'].toString().substring(0, 8) : player['_id'].toString()}' : player['id'] != null ? ' #${player['id'].toString().length > 8 ? player['id'].toString().substring(0, 8) : player['id'].toString()}' : ''}',
+                                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                               const SizedBox(height: 4),
                                               Row(
@@ -312,7 +319,7 @@ class _RankingScreenState extends State<RankingScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: const Color(0xFF0A0E12),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -378,6 +385,22 @@ class _RankingScreenState extends State<RankingScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (_userRanking!['_id'] != null || _userRanking!['id'] != null) ...[
+                  const SizedBox(height: 4),
+                  Builder(
+                    builder: (context) {
+                      final id = (_userRanking!['_id'] ?? _userRanking!['id'])?.toString() ?? '';
+                      final displayId = id.length > 8 ? id.substring(0, 8) : id;
+                      return Text(
+                        'ID: $displayId',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[400],
+                          fontFamily: 'monospace',
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),

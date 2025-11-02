@@ -127,13 +127,11 @@ class HabitsProvider extends ChangeNotifier {
         // Recarregar hábitos para incluir o novo
         await loadHabits();
         
-        // Verificar conquistas automaticamente após criar hábito
-        try {
-          await ApiService.verifyAchievements();
-        } catch (e) {
-          // Silenciar erro se a verificação falhar
-          print('Erro ao verificar conquistas: $e');
-        }
+        // Aguardar um pouco para garantir que o backend processou
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // Verificar conquistas será feito pela tela que cria o hábito
+        // para garantir que as conquistas sejam recarregadas corretamente
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao criar hábito');
       }
@@ -190,13 +188,8 @@ class HabitsProvider extends ChangeNotifier {
         // Recarregar novamente para garantir dados atualizados
         await loadHabits();
         
-        // Verificar conquistas automaticamente após completar hábito
-        try {
-          await ApiService.verifyAchievements();
-        } catch (e) {
-          // Silenciar erro se a verificação falhar
-          print('Erro ao verificar conquistas: $e');
-        }
+        // A verificação de conquistas será feita pelas telas que chamam completeHabit
+        // para garantir que as conquistas sejam recarregadas corretamente
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao completar hábito');
       }

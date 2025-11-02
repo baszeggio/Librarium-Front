@@ -80,10 +80,6 @@ class NotificationsProvider extends ChangeNotifier {
   }
 
   Future<void> loadUnreadNotifications() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
       // Endpoint pode não existir - tratar silenciosamente
       final notificationsData = await ApiService.getUnreadNotifications();
@@ -92,18 +88,25 @@ class NotificationsProvider extends ChangeNotifier {
           .toList();
       
       // Adicionar notificações não lidas à lista completa
+      bool hasNewNotifications = false;
       for (final notification in unread) {
         if (!_notifications.any((n) => n.id == notification.id)) {
           _notifications.add(notification);
+          hasNewNotifications = true;
         }
+      }
+      
+      if (hasNewNotifications || notificationsData.isNotEmpty) {
+        notifyListeners();
       }
     } catch (e) {
       // Endpoint não existe - tratar silenciosamente, não mostrar erro
-      // Apenas logar em debug
-      print('Endpoint de notificações não lidas não encontrado: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      // Tentar carregar todas as notificações como fallback
+      try {
+        await loadNotifications();
+      } catch (loadError) {
+        print('Erro ao carregar notificações: $loadError');
+      }
     }
   }
 
