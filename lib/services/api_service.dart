@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'http://localhost:3000/api';
-  // Para produção, altere para: 'https://seu-app.railway.app/api'
   
   static Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
     final headers = <String, String>{
@@ -92,38 +91,92 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getProfile() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao carregar perfil';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> profileData) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-      body: jsonEncode(profileData),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+        body: jsonEncode(profileData),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao atualizar perfil';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> verifyToken() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/verificar'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/verificar'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Token inválido'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao verificar token'};
+    }
   }
 
   // ========== HABITS ENDPOINTS ==========
   static Future<List<dynamic>> getHabits() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/habitos'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data['habitos'] ?? [];
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/habitos'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return [];
+      }
+      
+      final data = jsonDecode(response.body);
+      return data['habitos'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> getHabit(String habitId) async {
@@ -161,11 +214,33 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> completeHabit(String habitId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/habitos/$habitId/concluir'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/habitos/$habitId/concluir'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode == 404) {
+        throw Exception('Hábito já foi concluído hoje');
+      }
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao concluir hábito';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getHabitProgress(String habitId) async {
@@ -391,19 +466,37 @@ class ApiService {
 
   // ========== USER ENDPOINTS ==========
   static Future<Map<String, dynamic>> getUserDashboard() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/dashboard'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/dashboard'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+    }
   }
 
   static Future<Map<String, dynamic>> getUserStats() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/estatisticas'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/estatisticas'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+    }
   }
 
   static Future<List<dynamic>> getRanking() async {
@@ -442,12 +535,30 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> customizeAvatar(Map<String, dynamic> customization) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/usuarios/avatar/customizar'),
-      headers: await _getHeaders(),
-      body: jsonEncode(customization),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/usuarios/avatar/customizar'),
+        headers: await _getHeaders(),
+        body: jsonEncode(customization),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao customizar avatar';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> exportUserData() async {

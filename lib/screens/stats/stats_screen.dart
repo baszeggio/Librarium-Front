@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../providers/stats_provider.dart';
 import '../../widgets/stats_card.dart';
 
@@ -347,6 +346,20 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildWeeklyChart(Stats stats) {
+    // Dados da semana (simulado - pode ser substituído por dados reais da API)
+    final List<double> weeklyData = [
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 100) : 0.0,
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 80) : 0.0,
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 90) : 0.0,
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 70) : 0.0,
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 85) : 0.0,
+      stats.totalHabits > 0 ? (stats.completedHabits / stats.totalHabits * 95) : 0.0,
+      stats.completionRate * 100,
+    ];
+    
+    final maxValue = weeklyData.reduce((a, b) => a > b ? a : b);
+    final maxHeight = maxValue > 0 ? maxValue : 100.0;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -367,43 +380,90 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          // Gráfico simplificado sem FL Chart
-          Container(
+          // Gráfico de barras simples
+          SizedBox(
             height: 200,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A0E12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.trending_up,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Gráfico em Desenvolvimento',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                for (int i = 0; i < 7; i++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 40),
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Container(
+                                  width: double.infinity,
+                                  height: maxHeight > 0 ? (weeklyData[i] / maxHeight * 160).clamp(0.0, 160.0) : 0,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        Theme.of(context).colorScheme.primary,
+                                        Theme.of(context).colorScheme.secondary,
+                                      ],
+                                    ),
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            height: 40,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _getDayName(i),
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.grey[400],
+                                    fontSize: 9,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${weeklyData[i].toInt()}%',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Em breve você verá seus dados aqui!',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _getDayName(int index) {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return days[index];
   }
 
   Widget _buildCategoryStats(Stats stats) {

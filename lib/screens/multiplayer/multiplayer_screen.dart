@@ -1107,7 +1107,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Funcionalidade de amigos em desenvolvimento.',
+                'Adicione amigos pelo ID para desafiar e competir!',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
                 textAlign: TextAlign.center,
               ),

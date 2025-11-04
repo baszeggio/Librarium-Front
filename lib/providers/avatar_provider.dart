@@ -48,11 +48,12 @@ class Avatar {
   }
 
   String get title {
-    if (nivel <= 10) return 'Aspirante';
-    if (nivel <= 20) return 'Caçador';
-    if (nivel <= 30) return 'Guardião do Librarium';
-    if (nivel <= 40) return 'Conjurador Supremo';
-    return 'Lenda Viva';
+    // O título deve vir do backend, mas temos um fallback baseado no nível
+    // Baseado na lógica do backend (models/User.js - tituloCalculado)
+    if (nivel >= 31) return 'Conjurador Supremo';
+    if (nivel >= 21) return 'Guardião do Librarium';
+    if (nivel >= 11) return 'Caçador';
+    return 'Aspirante'; // Fallback para níveis 1-10
   }
 
   double get progressPercentage {
@@ -117,10 +118,24 @@ class AvatarProvider extends ChangeNotifier {
         if (usuario['personalizacaoAvatar'] != null) {
           final personalizacao = usuario['personalizacaoAvatar'];
           if (personalizacao is Map) {
+            // Primeiro, extrair campos do custom (head, tema, bodyColor)
+            if (personalizacao['custom'] != null && personalizacao['custom'] is Map) {
+              final custom = personalizacao['custom'] as Map;
+              custom.forEach((key, value) {
+                if (key is String && value != null) {
+                  equipamentos[key] = value.toString();
+                }
+              });
+            }
+            
+            // Depois, extrair outros campos diretos
             personalizacao.forEach((key, value) {
+              // Ignorar 'custom' pois já processamos acima
+              if (key == 'custom') return;
+              
               if (key is String && value is String) {
                 equipamentos[key] = value;
-              } else if (key is String && value != null) {
+              } else if (key is String && value != null && value is! Map) {
                 equipamentos[key] = value.toString();
               }
             });

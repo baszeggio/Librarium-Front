@@ -66,17 +66,29 @@ class StatsProvider extends ChangeNotifier {
         final usuario = dashboard['usuario'] ?? {};
         final sequencia = usuario['sequencia'] ?? {};
         
+        // Calcular estatísticas de categoria se houver hábitos
+        Map<String, int> categoryStats = {};
+        if (dashboard['habitos'] != null) {
+          final habits = dashboard['habitos'] as List;
+          for (var habit in habits) {
+            if (habit is Map && habit['categoria'] != null) {
+              final categoria = habit['categoria'].toString();
+              categoryStats[categoria] = (categoryStats[categoria] ?? 0) + 1;
+            }
+          }
+        }
+        
         // Mapear os campos do backend para o modelo Stats
         _stats = Stats(
           totalHabits: statsHoje['totalHabitos'] ?? 
                       (dashboard['habitos'] as List?)?.length ?? 0,
           completedHabits: statsHoje['habitosConcluidos'] ?? 0,
-          currentStreak: sequencia['atual'] ?? 0,
-          longestStreak: sequencia['maiorSequencia'] ?? 0,
+          currentStreak: sequencia['atual'] ?? sequencia['sequenciaAtual'] ?? 0,
+          longestStreak: sequencia['maiorSequencia'] ?? sequencia['maior'] ?? 0,
           completionRate: (statsHoje['porcentagemConclusao'] ?? 0.0) / 100.0,
           totalXP: usuario['experiencia'] ?? 0,
           level: usuario['nivel'] ?? 1,
-          categoryStats: {}, // Será preenchido se necessário
+          categoryStats: categoryStats,
           weeklyData: [],
           monthlyData: [],
         );
