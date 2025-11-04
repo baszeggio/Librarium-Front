@@ -57,8 +57,12 @@ class StatsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Usar getUserDashboard que retorna estatísticas completas do usuário
-      final dashboardData = await ApiService.getUserDashboard();
+      // Buscar dashboard e dados semanais em paralelo
+      final dashboardFuture = ApiService.getUserDashboard();
+      final weeklyChartFuture = ApiService.getWeeklyChart();
+      
+      final dashboardData = await dashboardFuture;
+      final weeklyChartData = await weeklyChartFuture;
       
       if (dashboardData['sucesso'] == true && dashboardData['dashboard'] != null) {
         final dashboard = dashboardData['dashboard'];
@@ -78,6 +82,42 @@ class StatsProvider extends ChangeNotifier {
           }
         }
         
+        // Processar dados semanais reais
+        List<Map<String, dynamic>> weeklyData = [];
+        if (weeklyChartData['sucesso'] == true && weeklyChartData['graficoSemanal'] != null) {
+          final graficoSemanal = weeklyChartData['graficoSemanal'] as List;
+          
+          // Garantir que temos 7 dias (da mais antiga até hoje)
+          final hoje = DateTime.now();
+          final diasSemana = <String, Map<String, dynamic>>{};
+          
+          // Inicializar todos os 7 dias
+          for (int i = 6; i >= 0; i--) {
+            final data = hoje.subtract(Duration(days: i));
+            final dataString = '${data.year}-${data.month.toString().padLeft(2, '0')}-${data.day.toString().padLeft(2, '0')}';
+            diasSemana[dataString] = {
+              'data': dataString,
+              'concluidos': 0,
+              'perdidos': 0,
+              'experiencia': 0,
+              'habitos': []
+            };
+          }
+          
+          // Preencher com dados reais da API
+          for (var dia in graficoSemanal) {
+            if (dia is Map<String, dynamic> && dia['data'] != null) {
+              final dataString = dia['data'].toString().split('T')[0];
+              if (diasSemana.containsKey(dataString)) {
+                diasSemana[dataString] = Map<String, dynamic>.from(dia);
+              }
+            }
+          }
+          
+          // Converter para lista ordenada
+          weeklyData = diasSemana.values.toList();
+        }
+        
         // Mapear os campos do backend para o modelo Stats
         _stats = Stats(
           totalHabits: statsHoje['totalHabitos'] ?? 
@@ -89,7 +129,7 @@ class StatsProvider extends ChangeNotifier {
           totalXP: usuario['experiencia'] ?? 0,
           level: usuario['nivel'] ?? 1,
           categoryStats: categoryStats,
-          weeklyData: [],
+          weeklyData: weeklyData,
           monthlyData: [],
         );
       } else {
