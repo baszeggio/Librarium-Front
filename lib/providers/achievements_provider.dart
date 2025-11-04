@@ -25,17 +25,24 @@ class Achievement {
   });
 
   factory Achievement.fromJson(Map<String, dynamic> json) {
+    // Verificar se está desbloqueada baseado em desbloqueadaEm (campo do backend)
+    final desbloqueadaEm = json['desbloqueadaEm'];
+    final estaDesbloqueada = desbloqueadaEm != null && desbloqueadaEm.toString().isNotEmpty;
+    final dataDesbloqueio = estaDesbloqueada && desbloqueadaEm != null
+        ? (desbloqueadaEm is DateTime 
+            ? desbloqueadaEm 
+            : DateTime.parse(desbloqueadaEm.toString()))
+        : null;
+    
     return Achievement(
       id: json['_id'] ?? json['id'] ?? '',
       tipo: json['tipo'] ?? '',
       titulo: json['titulo'] ?? '',
       descricao: json['descricao'] ?? '',
       raridade: json['raridade'] ?? 'comum',
-      recompensaXP: json['recompensaXP'] ?? 0,
-      desbloqueada: json['desbloqueada'] ?? false,
-      dataDesbloqueio: json['dataDesbloqueio'] != null 
-          ? DateTime.parse(json['dataDesbloqueio']) 
-          : null,
+      recompensaXP: json['experienciaRecompensa'] ?? json['recompensaXP'] ?? 0,
+      desbloqueada: estaDesbloqueada,
+      dataDesbloqueio: dataDesbloqueio,
       icone: json['icone'] ?? 'trophy',
     );
   }
@@ -307,8 +314,7 @@ class AchievementsProvider extends ChangeNotifier {
         descricao: 'Crie seu primeiro hábito na jornada',
         raridade: 'comum',
         recompensaXP: 50,
-        desbloqueada: true,
-        dataDesbloqueio: DateTime.now().subtract(const Duration(days: 1)),
+        desbloqueada: false, // Não desbloqueada por padrão
         icone: 'assets/green_award.png',
       ),
       Achievement(
@@ -318,8 +324,7 @@ class AchievementsProvider extends ChangeNotifier {
         descricao: 'Mantenha uma sequência de 3 dias',
         raridade: 'comum',
         recompensaXP: 75,
-        desbloqueada: true,
-        dataDesbloqueio: DateTime.now().subtract(const Duration(days: 2)),
+        desbloqueada: false, // Não desbloqueada por padrão
         icone: 'assets/green_award.png',
       ),
       Achievement(
@@ -361,8 +366,7 @@ class AchievementsProvider extends ChangeNotifier {
         descricao: 'Mantenha uma sequência de 7 dias',
         raridade: 'raro',
         recompensaXP: 200,
-        desbloqueada: true,
-        dataDesbloqueio: DateTime.now().subtract(const Duration(days: 3)),
+        desbloqueada: false, // Não desbloqueada por padrão
         icone: 'assets/red_award.png',
       ),
       Achievement(

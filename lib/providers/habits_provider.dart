@@ -16,6 +16,7 @@ class Habit {
   final int totalConclusoes;
   final int totalPerdidos;
   final double taxaConclusao;
+  final bool? completado; // Indica se o hábito foi completado hoje (opcional)
 
   Habit({
     required this.id,
@@ -32,6 +33,7 @@ class Habit {
     required this.totalConclusoes,
     required this.totalPerdidos,
     required this.taxaConclusao,
+    this.completado,
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -50,6 +52,7 @@ class Habit {
       totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? 0,
       totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? 0,
       taxaConclusao: json['estatisticas']?['taxaConclusao']?.toDouble() ?? 0.0,
+      completado: json['completado'] ?? json['concluidoHoje'] ?? json['statusHoje'] == 'concluido',
     );
   }
 }

@@ -367,9 +367,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, habitsProvider, child) {
         final activeHabits = habitsProvider.activeHabits.take(3).toList();
 
-        // Variável para controlar a mensagem de "hábito já feito hoje"
-        String? doneTodayMessage;
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -438,54 +435,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               )
             else
-              ...activeHabits.map((habit) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: HabitCard(
-                      habit: habit,
-                      onComplete: () async {
-                        try {
-                          await habitsProvider.completeHabit(habit.id);
-                          // Recarregar estatísticas para atualizar streak
-                          await context.read<StatsProvider>().loadStats();
-                          // Recarregar avatar também
-                          await context.read<AvatarProvider>().loadAvatar();
-                          // Verificar e recarregar conquistas
-                          await context
-                              .read<AchievementsProvider>()
-                              .verifyAchievements();
-                        } catch (e) {
-                          // Checa padrão do erro 404 de já feito hoje
-                          final message = e.toString();
-                          if (message.contains('statusCode: 404') ||
-                              message.contains('Caminho não encontrado')) {
-                            // Mostra snackbar dizendo que já foi feito hoje
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Você já completou este hábito hoje!',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                  backgroundColor: Colors.deepPurple,
-                                ),
-                              );
+              ...activeHabits.map(
+                (habit) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: HabitCard(
+                    habit: habit,
+                    // Nova lógica: trava a conclusão se já completado hoje
+                    onComplete: (habit.completado ?? false)
+                        ? null
+                        : () async {
+                            try {
+                              await habitsProvider.completeHabit(habit.id);
+                              // Recarrega estatísticas, avatar e conquistas após completar hábito
+                              await context.read<StatsProvider>().loadStats();
+                              await context.read<AvatarProvider>().loadAvatar();
+                              await context
+                                  .read<AchievementsProvider>()
+                                  .verifyAchievements();
+                            } catch (e) {
+                              // Trata erro específico de já ter completado hoje pelo backend
+                              final message = e.toString();
+                              if (message.contains('statusCode: 404') ||
+                                  message.contains('Caminho não encontrado') ||
+                                  message.contains('já completou este hábito hoje')) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Você já completou este hábito hoje!',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                      backgroundColor: Colors.deepPurple,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                print('Erro ao concluir hábito: $e');
+                              }
                             }
-                          } else {
-                            print('Erro ao concluir hábito: $e');
-                          }
-                        }
-                      },
-                      onDelete: () {
-                        _showDeleteDialog(context, habit.id, habit.titulo,
-                            habitsProvider);
-                      },
-                    ),
-                  )),
+                          },
+                    onDelete: () {
+                      _showDeleteDialog(
+                          context, habit.id, habit.titulo, habitsProvider);
+                    },
+                  ),
+                ),
+              ),
           ],
         );
       },
     );
   }
+
 
   Widget _buildAchievementsSection() {
     return Consumer<AchievementsProvider>(

@@ -6,8 +6,6 @@ import '../../providers/achievements_provider.dart';
 import '../../widgets/habit_card.dart';
 import '../../widgets/custom_button.dart';
 import 'create_habit_screen.dart';
-import 'edit_habit_screen.dart';
-import 'habit_detail_screen.dart';
 
 class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key});
@@ -121,19 +119,19 @@ class _HabitsScreenState extends State<HabitsScreen> {
         // Header
         Padding(
           padding: const EdgeInsets.all(16),
-          child:               Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        context.go('/dashboard');
-                      }
-                    },
-                    icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
-                  ),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    context.go('/dashboard');
+                  }
+                },
+                icon: const Icon(Icons.arrow_back),
+                color: Colors.white,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Meus Hábitos',
@@ -163,6 +161,8 @@ class _HabitsScreenState extends State<HabitsScreen> {
                   itemCount: habits.length,
                   itemBuilder: (context, index) {
                     final habit = habits[index];
+                    final bool isCompleted = habit.completado ?? false;
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Dismissible(
@@ -179,23 +179,24 @@ class _HabitsScreenState extends State<HabitsScreen> {
                         ),
                         confirmDismiss: (direction) async {
                           return await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Excluir Hábito'),
-                              content: const Text('Tem certeza que deseja excluir este hábito?'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Cancelar'),
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Excluir Hábito'),
+                                  content: const Text('Tem certeza que deseja excluir este hábito?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                      child: const Text('Excluir'),
+                                    ),
+                                  ],
                                 ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                  child: const Text('Excluir'),
-                                ),
-                              ],
-                            ),
-                          ) ?? false;
+                              ) ??
+                              false;
                         },
                         onDismissed: (direction) async {
                           try {
@@ -221,15 +222,17 @@ class _HabitsScreenState extends State<HabitsScreen> {
                         },
                         child: HabitCard(
                           habit: habit,
-                          onComplete: () async {
-                            await habitsProvider.completeHabit(habit.id);
-                            // Verificar e recarregar conquistas
-                            try {
-                              await context.read<AchievementsProvider>().verifyAchievements();
-                            } catch (e) {
-                              print('Erro ao verificar conquistas: $e');
-                            }
-                          },
+                          onComplete: isCompleted
+                              ? null
+                              : () async {
+                                  await habitsProvider.completeHabit(habit.id);
+                                  // Verificar e recarregar conquistas
+                                  try {
+                                    await context.read<AchievementsProvider>().verifyAchievements();
+                                  } catch (e) {
+                                    print('Erro ao verificar conquistas: $e');
+                                  }
+                                },
                           onDelete: () {
                             _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);
                           },

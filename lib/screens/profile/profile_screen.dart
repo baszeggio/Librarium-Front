@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/custom_button.dart';
+import '../../services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -121,10 +124,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               // Avatar (foto baseada na cor escolhida na customização)
-              AvatarWidget(
-                avatar: avatarProvider.avatar,
-                size: 100,
-                showLevel: true,
+              Stack(
+                children: [
+                  Consumer<AuthProvider>(
+                    builder: (context, authProvider, child) {
+                      final fotoPerfil = authProvider.user?['fotoPerfil'] as String?;
+                      return AvatarWidget(
+                        avatar: avatarProvider.avatar,
+                        size: 100,
+                        showLevel: true,
+                        fotoPerfilUrl: fotoPerfil,
+                      );
+                    },
+                  ),
+                  // Botão para alterar foto
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.camera_alt, size: 20),
+                        color: Colors.white,
+                        onPressed: () => _showFotoPerfilDialog(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               
               const SizedBox(height: 20),
@@ -557,6 +592,296 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
+  }
+
+  void _showFotoPerfilDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.white),
+              title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(context, ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.white),
+              title: const Text('Tirar Foto', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(context, ImageSource.camera);
+              },
+            ),
+            Consumer<AuthProvider>(
+              builder: (context, authProvider, child) {
+                final temFoto = authProvider.user?['fotoPerfil'] != null;
+                if (temFoto) {
+                  return ListTile(
+                    leading: const Icon(Icons.delete, color: Colors.red),
+                    title: const Text('Remover Foto', style: TextStyle(color: Colors.red)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _removerFotoPerfil(context);
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(BuildContext context, ImageSource source) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 2000,
+        maxHeight: 2000,
+        imageQuality: 90,
+      );
+
+      if (image != null) {
+        // Mostrar dialog de crop/edit
+        await _showCropDialog(context, image.path);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao selecionar imagem: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showCropDialog(BuildContext context, String imagePath) async {
+    try {
+      // Mostrar loading enquanto processa a imagem
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Fazer crop da imagem
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imagePath,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Editar Foto',
+            toolbarColor: Theme.of(context).colorScheme.primary,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Editar Foto',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+      );
+
+      // Fechar loading
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      if (croppedFile != null) {
+        // Fazer upload da imagem cropada
+        await _uploadFotoPerfil(context, croppedFile.path);
+      } else {
+        // Usuário cancelou o crop
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Edição cancelada'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Fechar loading se ainda estiver aberto
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao editar imagem: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadFotoPerfil(BuildContext context, String imagePath) async {
+    try {
+      // Mostrar loading com progresso
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(
+                  'Enviando foto...',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final response = await ApiService.uploadFotoPerfil(imagePath);
+
+      // Fechar loading
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      if (response['sucesso'] == true) {
+        // Atualizar perfil do usuário
+        final authProvider = context.read<AuthProvider>();
+        await authProvider.loadProfile();
+
+        // Forçar atualização do widget
+        if (context.mounted) {
+          setState(() {});
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Foto de perfil atualizada com sucesso!'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['mensagem'] ?? response['erro'] ?? 'Erro ao fazer upload');
+      }
+    } catch (e) {
+      // Fechar loading se ainda estiver aberto
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Erro: ${e.toString()}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removerFotoPerfil(BuildContext context) async {
+    try {
+      // Mostrar loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final response = await ApiService.removerFotoPerfil();
+
+      // Fechar loading
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      if (response['sucesso'] == true) {
+        // Atualizar perfil do usuário
+        final authProvider = context.read<AuthProvider>();
+        await authProvider.loadProfile();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Foto de perfil removida com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['mensagem'] ?? 'Erro ao remover foto');
+      }
+    } catch (e) {
+      // Fechar loading se ainda estiver aberto
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao remover foto: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
 }
