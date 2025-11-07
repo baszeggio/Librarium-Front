@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/multiplayer_provider.dart';
 import '../../providers/messages_provider.dart';
+import '../../providers/friends_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/avatar_widget.dart';
 import '../ranking/ranking_screen.dart';
 
 class MultiplayerScreen extends StatefulWidget {
@@ -27,6 +29,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
       context.read<MultiplayerProvider>().loadBattles();
       context.read<MultiplayerProvider>().loadChallenges();
       context.read<MessagesProvider>().loadMessages();
+      context.read<FriendsProvider>().loadAll();
     });
   }
 
@@ -116,7 +119,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
 
           const SizedBox(height: 24),
 
-          // Sistema de amizades (front-end)
+          // Sistema de amizades
           _buildFriendsSection(),
         ],
       ),
@@ -434,8 +437,8 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     );
   }
 
-  void _showCreateBattleDialog(BuildContext context) {
-    final opponentIdController = TextEditingController();
+  void _showCreateBattleDialog(BuildContext context, {String? friendId, String? friendName}) {
+    final opponentIdController = TextEditingController(text: friendId ?? '');
     String? selectedType = 'sequencia';
     final durationController = TextEditingController(text: '60');
 
@@ -446,9 +449,24 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
           builder: (context, setState) {
             return AlertDialog(
               backgroundColor: Theme.of(context).colorScheme.surface,
-              title: const Text(
-                'Criar Batalha',
-                style: TextStyle(color: Colors.white),
+              title: Row(
+                children: [
+                  const Icon(Icons.sports_mma, color: Colors.red),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Criar Batalha',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  if (friendId != null)
+                    IconButton(
+                      icon: const Icon(Icons.people, size: 20),
+                      color: Colors.blue,
+                      onPressed: () => _showSelectFriendDialog(context, setState, opponentIdController, friendName),
+                      tooltip: 'Escolher amigo',
+                    ),
+                ],
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -457,8 +475,18 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                     CustomTextField(
                       controller: opponentIdController,
                       label: 'ID do Adversário',
-                      hint: 'Digite o ID do adversário',
+                      hint: 'Digite o ID ou escolha um amigo',
+                      enabled: friendId == null,
                     ),
+                    if (friendId == null) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => _showSelectFriendDialog(context, setState, opponentIdController, friendName),
+                        icon: const Icon(Icons.people, size: 18),
+                        label: const Text('Escolher dos Amigos'),
+                        style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       value: selectedType,
@@ -472,6 +500,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                         DropdownMenuItem(value: 'sequencia', child: Text('Sequência')),
                         DropdownMenuItem(value: 'xp_diario', child: Text('XP Diário')),
                         DropdownMenuItem(value: 'habitos_concluidos', child: Text('Hábitos Concluídos')),
+                        DropdownMenuItem(value: 'nivel_rapido', child: Text('Nível Rápido')),
                       ],
                       onChanged: (value) => setState(() => selectedType = value),
                     ),
@@ -494,7 +523,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   onPressed: () async {
                     if (opponentIdController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Digite o ID do adversário')),
+                        const SnackBar(content: Text('Digite o ID do adversário ou escolha um amigo')),
                       );
                       return;
                     }
@@ -512,6 +541,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                             backgroundColor: Colors.green,
                           ),
                         );
+                        context.read<MultiplayerProvider>().loadBattles();
                       }
                     } catch (e) {
                       if (context.mounted) {
@@ -529,6 +559,71 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showSelectFriendDialog(BuildContext context, StateSetter setState, TextEditingController controller, String? currentName) {
+    final friendsProvider = context.read<FriendsProvider>();
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          title: const Text(
+            'Escolher Amigo',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: friendsProvider.friends.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text(
+                        'Você não tem amigos ainda.\nAdicione amigos primeiro!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: friendsProvider.friends.length,
+                    itemBuilder: (context, index) {
+                      final friend = friendsProvider.friends[index];
+                      return ListTile(
+                        leading: AvatarWidget(
+                          avatar: null,
+                          size: 40,
+                          fotoPerfilUrl: friend.fotoPerfil,
+                        ),
+                        title: Text(
+                          friend.nomeUsuario,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          'Nível ${friend.nivel}',
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
+                        onTap: () {
+                          setState(() {
+                            controller.text = friend.id;
+                          });
+                          Navigator.pop(dialogContext);
+                        },
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+          ],
         );
       },
     );
@@ -1071,51 +1166,139 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   Widget _buildFriendsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Sistema de Amizades',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Conecte-se com outros jogadores',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
+    return Consumer<FriendsProvider>(
+      builder: (context, friendsProvider, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Amizades',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/friends'),
+                  child: Text(
+                    'Ver Todas',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  TextButton(
-                    onPressed: _showAddFriendDialog,
-                    child: const Text('Adicionar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.people, color: Colors.blue[400], size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${friendsProvider.friendsCount} ${friendsProvider.friendsCount == 1 ? 'amigo' : 'amigos'}',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (friendsProvider.pendingRequestsCount > 0)
+                              Text(
+                                '${friendsProvider.pendingRequestsCount} solicitação(ões) pendente(s)',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.orange,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomButton(
+                          text: 'Gerenciar Amizades',
+                          onPressed: () => context.push('/friends'),
+                          backgroundColor: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CustomButton(
+                          text: 'Buscar Usuários',
+                          onPressed: _showSearchUsersDialog,
+                          backgroundColor: const Color(0xFF14181C),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (friendsProvider.friends.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: friendsProvider.friends.take(5).length,
+                        itemBuilder: (context, index) {
+                          final friend = friendsProvider.friends[index];
+                          return Container(
+                            width: 80,
+                            margin: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              children: [
+                                AvatarWidget(
+                                  avatar: null,
+                                  size: 50,
+                                  fotoPerfilUrl: friend.fotoPerfil,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  friend.nomeUsuario.length > 10 
+                                      ? '${friend.nomeUsuario.substring(0, 10)}...'
+                                      : friend.nomeUsuario,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Funcionalidade de amigos em desenvolvimento.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  void _showSearchUsersDialog() {
+    context.push('/friends');
   }
 
   void _showAddFriendDialog() {

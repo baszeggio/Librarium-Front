@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'http://localhost:3000/api';
-  // Para produção, altere para: 'https://seu-app.railway.app/api'
   
   static Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
     final headers = <String, String>{
@@ -92,38 +91,163 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getProfile() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao carregar perfil';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> profileData) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-      body: jsonEncode(profileData),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+        body: jsonEncode(profileData),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao atualizar perfil';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadFotoPerfil(String filePath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      
+      if (token == null) {
+        throw Exception('Token não encontrado');
+      }
+
+      // Usar multipart para upload de arquivo
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/usuarios/foto-perfil'),
+      );
+
+      // Adicionar token de autenticação
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Adicionar arquivo
+      final file = await http.MultipartFile.fromPath('foto', filePath);
+      request.files.add(file);
+
+      // Enviar requisição
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao fazer upload da foto';
+        throw Exception(errorMsg);
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> removerFotoPerfil() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/usuarios/foto-perfil'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao remover foto';
+        throw Exception(errorMsg);
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> verifyToken() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/verificar'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/verificar'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Token inválido'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao verificar token'};
+    }
   }
 
   // ========== HABITS ENDPOINTS ==========
   static Future<List<dynamic>> getHabits() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/habitos'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data['habitos'] ?? [];
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/habitos'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return [];
+      }
+      
+      final data = jsonDecode(response.body);
+      return data['habitos'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> getHabit(String habitId) async {
@@ -161,11 +285,33 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> completeHabit(String habitId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/habitos/$habitId/concluir'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/habitos/$habitId/concluir'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode == 404) {
+        throw Exception('Hábito já foi concluído hoje');
+      }
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao concluir hábito';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getHabitProgress(String habitId) async {
@@ -391,19 +537,37 @@ class ApiService {
 
   // ========== USER ENDPOINTS ==========
   static Future<Map<String, dynamic>> getUserDashboard() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/dashboard'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/dashboard'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+    }
   }
 
   static Future<Map<String, dynamic>> getUserStats() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/estatisticas'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/estatisticas'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+    }
   }
 
   static Future<List<dynamic>> getRanking() async {
@@ -442,12 +606,30 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> customizeAvatar(Map<String, dynamic> customization) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/usuarios/avatar/customizar'),
-      headers: await _getHeaders(),
-      body: jsonEncode(customization),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/usuarios/avatar/customizar'),
+        headers: await _getHeaders(),
+        body: jsonEncode(customization),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao customizar avatar';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> exportUserData() async {
@@ -600,12 +782,39 @@ class ApiService {
 
   // Mensagens
   static Future<Map<String, dynamic>> sendMessage(Map<String, dynamic> messageData) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/multiplayer/mensagem'),
-      headers: await _getHeaders(),
-      body: jsonEncode(messageData),
-    );
-    return jsonDecode(response.body);
+    try {
+      // Converter destinatarioId para destinatario se necessário (backend espera destinatarioId)
+      final data = Map<String, dynamic>.from(messageData);
+      if (data.containsKey('destinatarioId')) {
+        // Mantém destinatarioId como está, pois o backend espera esse campo
+      } else if (data.containsKey('destinatario')) {
+        data['destinatarioId'] = data['destinatario'];
+        data.remove('destinatario');
+      }
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/multiplayer/mensagem'),
+        headers: await _getHeaders(),
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao enviar mensagem';
+        throw Exception(errorMsg);
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<List<dynamic>> getConversation(String userId) async {
@@ -614,7 +823,20 @@ class ApiService {
       headers: await _getHeaders(),
     );
     final data = jsonDecode(response.body);
-    return data['mensagens'] ?? [];
+    return data['conversa'] ?? [];
+  }
+
+  static Future<List<dynamic>> getUnreadMessages() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/mensagem/nao-lidas'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['mensagens'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> markMessageAsRead(String messageId) async {
@@ -625,13 +847,81 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  static Future<List<dynamic>> getUnreadMessages() async {
+  // Amizades
+  static Future<Map<String, dynamic>> sendFriendRequest(String usuarioId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/enviar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'usuarioId': usuarioId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> acceptFriendRequest(String amizadeId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/aceitar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> rejectFriendRequest(String amizadeId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/rejeitar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<List<dynamic>> getFriends() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/multiplayer/mensagem/nao-lidas'),
+      Uri.parse('$baseUrl/multiplayer/amizade/amigos'),
       headers: await _getHeaders(),
     );
     final data = jsonDecode(response.body);
-    return data['mensagens'] ?? [];
+    return data['amigos'] ?? [];
+  }
+
+  static Future<List<dynamic>> getPendingFriendRequests() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/amizade/pendentes'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['solicitacoes'] ?? [];
+  }
+
+  static Future<List<dynamic>> getSentFriendRequests() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/amizade/enviadas'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['solicitacoes'] ?? [];
+  }
+
+  static Future<Map<String, dynamic>> removeFriend(String amizadeId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/multiplayer/amizade/remover'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/buscar-usuarios?query=$query'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['usuarios'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> getMessageStats() async {

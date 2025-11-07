@@ -21,16 +21,36 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
+    // Suportar tanto objeto populado quanto ID simples
+    final remetenteData = json['remetente'];
+    final destinatarioData = json['destinatario'];
+    
+    String remetenteNome = '';
+    if (remetenteData is Map) {
+      remetenteNome = remetenteData['nomeUsuario'] ?? remetenteData['_id']?.toString() ?? '';
+    } else {
+      remetenteNome = remetenteData?.toString() ?? '';
+    }
+    
+    String destinatarioNome = '';
+    if (destinatarioData is Map) {
+      destinatarioNome = destinatarioData['nomeUsuario'] ?? destinatarioData['_id']?.toString() ?? '';
+    } else {
+      destinatarioNome = destinatarioData?.toString() ?? '';
+    }
+    
     return Message(
       id: json['_id'] ?? json['id'] ?? '',
-      remetente: json['remetente']?['nomeUsuario'] ?? json['remetente'] ?? '',
-      destinatario: json['destinatario']?['nomeUsuario'] ?? json['destinatario'] ?? '',
+      remetente: remetenteNome,
+      destinatario: destinatarioNome,
       texto: json['texto'] ?? '',
-      tipo: json['tipo'] ?? 'geral',
+      tipo: json['tipo'] ?? 'privada',
       lida: json['lida'] ?? false,
-      dataEnvio: json['dataEnvio'] != null 
-          ? DateTime.parse(json['dataEnvio'])
-          : null,
+      dataEnvio: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'].toString())
+          : (json['dataEnvio'] != null 
+              ? DateTime.parse(json['dataEnvio'].toString())
+              : null),
     );
   }
 }
@@ -97,12 +117,13 @@ class MessagesProvider extends ChangeNotifier {
 
     try {
       final response = await ApiService.sendMessage({
-        'destinatario': destinatarioId,
+        'destinatarioId': destinatarioId,
         'texto': texto,
         if (tipo != null) 'tipo': tipo,
       });
 
       if (response['sucesso'] == true) {
+        // Recarregar conversa após enviar mensagem
         await loadConversation(destinatarioId);
       } else {
         throw Exception(response['mensagem'] ?? 'Erro ao enviar mensagem');
@@ -110,6 +131,25 @@ class MessagesProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadConversationsList() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final messagesData = await ApiService.getUnreadMessages();
+      _messages = messagesData
+          .map((messageJson) => Message.fromJson(messageJson))
+          .toList();
+    } catch (e) {
+      _error = e.toString();
+      _messages = [];
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -124,6 +164,11 @@ class MessagesProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  void clearMessages() {
+    _messages = [];
+    notifyListeners();
   }
 
   void clearError() {

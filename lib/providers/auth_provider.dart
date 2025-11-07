@@ -183,4 +183,30 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> loadProfile() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await ApiService.getProfile();
+      
+      if (response['sucesso'] == true && response['usuario'] != null) {
+        _user = response['usuario'];
+        
+        // Salvar usuário atualizado no storage
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user', jsonEncode(_user));
+        
+        _isAuthenticated = true;
+      }
+    } catch (e) {
+      // Se erro, não alterar estado
+      print('Erro ao carregar perfil: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
 }

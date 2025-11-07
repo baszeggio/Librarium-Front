@@ -6,7 +6,6 @@ import '../../providers/avatar_provider.dart';
 import '../../providers/habits_provider.dart';
 import '../../providers/achievements_provider.dart';
 import '../../providers/stats_provider.dart';
-import '../../providers/notifications_provider.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/habit_card.dart';
 import '../../widgets/stats_card.dart';
@@ -21,7 +20,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -35,15 +33,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context.read<AvatarProvider>().loadAvatar(),
       context.read<HabitsProvider>().loadHabits(),
       context.read<StatsProvider>().loadStats(),
-      context.read<NotificationsProvider>().loadUnreadNotifications(),
     ]);
-    
+
     // Carregar e verificar conquistas separadamente
     await context.read<AchievementsProvider>().loadAchievements();
-    await context.read<AchievementsProvider>().verifyAchievements();
-    
-    // Recarregar notificações após verificar conquistas (pode haver novas notificações)
-    await context.read<NotificationsProvider>().loadNotifications();
   }
 
   @override
@@ -98,19 +91,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           // Header com avatar e informações do usuário
           _buildHeader(),
-          
           const SizedBox(height: 24),
-          
           // Cards de estatísticas
           _buildStatsSection(),
-          
           const SizedBox(height: 24),
-          
           // Hábitos do dia
           _buildHabitsSection(),
-          
           const SizedBox(height: 24),
-          
           // Conquistas recentes
           _buildAchievementsSection(),
         ],
@@ -142,170 +129,158 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 avatar: avatarProvider.avatar,
                 size: 80,
               ),
-              
               const SizedBox(width: 16),
-              
-                  // Informações do usuário
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Consumer<AuthProvider>(
-                          builder: (context, authProvider, child) {
-                            final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
-                                              authProvider.user?['nome'] ?? 
-                                              'Guerreiro';
-                            final userId = authProvider.user?['_id']?.toString() ?? 
-                                         authProvider.user?['id']?.toString() ?? '';
-                            final shortId = userId.length > 8 ? userId.substring(0, 8) : userId;
-                            
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Bem-vindo, $nomeUsuario!',
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              // Informações do usuário
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, child) {
+                        final nomeUsuario = authProvider.user?['nomeUsuario'] ??
+                            authProvider.user?['nome'] ??
+                            'Guerreiro';
+                        final userId = authProvider.user?['_id']?.toString() ??
+                            authProvider.user?['id']?.toString() ??
+                            '';
+                        final shortId =
+                            userId.length > 8 ? userId.substring(0, 8) : userId;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Bem-vindo, $nomeUsuario!',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (shortId.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '#$shortId',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (shortId.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '#$shortId',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
                                       color: Colors.grey[400],
                                       fontFamily: 'monospace',
                                       fontSize: 12,
                                     ),
-                                  ),
-                                ],
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 4),
-                        Consumer<AuthProvider>(
-                          builder: (context, authProvider, child) {
-                            // Obter dados reais do usuário
-                            final nivelNum = authProvider.user?['nivel'];
-                            final experienciaNum = authProvider.user?['experiencia'];
-                            final nivel = (nivelNum is int) ? nivelNum : (nivelNum is num) ? nivelNum.toInt() : 1;
-                            final experiencia = (experienciaNum is int) ? experienciaNum : (experienciaNum is num) ? experienciaNum.toInt() : 0;
-                            final titulo = authProvider.user?['titulo'] ?? 'Aspirante';
-                            
-                            // Calcular XP necessário para o próximo nível
-                            // Fórmula: 100 XP por nível até 10, depois aumenta
-                            int xpProximoNivel;
-                            if (nivel <= 10) {
-                              xpProximoNivel = nivel * 100;
-                            } else if (nivel <= 20) {
-                              xpProximoNivel = 1000 + ((nivel - 10) * 200);
-                            } else if (nivel <= 30) {
-                              xpProximoNivel = 3000 + ((nivel - 20) * 300);
-                            } else {
-                              xpProximoNivel = 6000 + ((nivel - 30) * 400);
-                            }
-                            
-                            // XP atual relativo ao nível atual
-                            int xpNivelAnterior;
-                            if (nivel <= 10) {
-                              xpNivelAnterior = (nivel - 1) * 100;
-                            } else if (nivel <= 20) {
-                              xpNivelAnterior = 1000 + ((nivel - 11) * 200);
-                            } else if (nivel <= 30) {
-                              xpNivelAnterior = 3000 + ((nivel - 21) * 300);
-                            } else {
-                              xpNivelAnterior = 6000 + ((nivel - 31) * 400);
-                            }
-                            
-                            final xpRestante = xpProximoNivel - xpNivelAnterior;
-                            final xpAtualNivel = experiencia - xpNivelAnterior;
-                            final progresso = xpRestante > 0 ? xpAtualNivel / xpRestante : 0.0;
-                            
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Título do avatar (usar do avatar se disponível, senão do usuário)
-                                Text(
-                                  avatarProvider.avatar?.title ?? titulo,
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, child) {
+                        // Obter dados reais do usuário
+                        final nivelNum = authProvider.user?['nivel'];
+                        final experienciaNum = authProvider.user?['experiencia'];
+                        final nivel = (nivelNum is int)
+                            ? nivelNum
+                            : (nivelNum is num)
+                                ? nivelNum.toInt()
+                                : 1;
+                        final experiencia = (experienciaNum is int)
+                            ? experienciaNum
+                            : (experienciaNum is num)
+                                ? experienciaNum.toInt()
+                                : 0;
+                        final titulo =
+                            authProvider.user?['titulo'] ?? 'Aspirante';
+
+                        // Calcular XP necessário para o próximo nível
+                        // Fórmula: 100 XP por nível até 10, depois aumenta
+                        int xpProximoNivel;
+                        if (nivel <= 10) {
+                          xpProximoNivel = nivel * 100;
+                        } else if (nivel <= 20) {
+                          xpProximoNivel = 1000 + ((nivel - 10) * 200);
+                        } else if (nivel <= 30) {
+                          xpProximoNivel = 3000 + ((nivel - 20) * 300);
+                        } else {
+                          xpProximoNivel = 6000 + ((nivel - 30) * 400);
+                        }
+
+                        // XP atual relativo ao nível atual
+                        int xpNivelAnterior;
+                        if (nivel <= 10) {
+                          xpNivelAnterior = (nivel - 1) * 100;
+                        } else if (nivel <= 20) {
+                          xpNivelAnterior = 1000 + ((nivel - 11) * 200);
+                        } else if (nivel <= 30) {
+                          xpNivelAnterior = 3000 + ((nivel - 21) * 300);
+                        } else {
+                          xpNivelAnterior = 6000 + ((nivel - 31) * 400);
+                        }
+
+                        final xpRestante = xpProximoNivel - xpNivelAnterior;
+                        final xpAtualNivel = experiencia - xpNivelAnterior;
+                        final progresso =
+                            xpRestante > 0 ? xpAtualNivel / xpRestante : 0.0;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Título do avatar (priorizar título do usuário do backend)
+                            Builder(
+                              builder: (context) {
+                                // Prioridade: 1. Título do usuário (backend), 2. Título calculado do avatar
+                                final tituloExibido = titulo.isNotEmpty 
+                                    ? titulo 
+                                    : (avatarProvider.avatar?.title ?? 'Aspirante');
+                                return Text(
+                                  tituloExibido,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        color:
+                                            Theme.of(context).colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                   overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 8),
-                                // Barra de progresso
-                                LinearProgressIndicator(
-                                  value: avatarProvider.avatar?.progressPercentage ?? 
-                                         progresso.clamp(0.0, 1.0),
-                                  backgroundColor: const Color(0xFF14181C),
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                // Texto de nível e XP
-                                Text(
-                                  'Nível ${avatarProvider.avatar?.nivel ?? nivel} - ${avatarProvider.avatar?.experiencia ?? experiencia} XP',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            // Barra de progresso
+                            LinearProgressIndicator(
+                              value: avatarProvider.avatar?.progressPercentage ??
+                                  progresso.clamp(0.0, 1.0),
+                              backgroundColor: const Color(0xFF14181C),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Texto de nível e XP
+                            Text(
+                              'Nível ${avatarProvider.avatar?.nivel ?? nivel} - ${avatarProvider.avatar?.experiencia ?? experiencia} XP',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: Colors.grey[300],
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  ),
-              
-              // Botões de ação
-              Consumer<NotificationsProvider>(
-                builder: (context, notificationsProvider, child) {
-                  final unreadCount = notificationsProvider.unreadCount;
-                  return Stack(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          context.read<NotificationsProvider>().loadNotifications();
-                          context.go('/notifications');
-                        },
-                        icon: const Icon(Icons.notifications),
-                        color: Colors.white,
-                      ),
-                      if (unreadCount > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              unreadCount > 9 ? '9+' : '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+                  ],
+                ),
               ),
+              // Botões de ação
               IconButton(
                 onPressed: () => context.go('/profile'),
                 icon: const Icon(Icons.settings),
@@ -326,16 +301,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final stats = statsProvider.stats!;
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Suas Estatísticas',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -391,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Consumer<HabitsProvider>(
       builder: (context, habitsProvider, child) {
         final activeHabits = habitsProvider.activeHabits.take(3).toList();
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -401,9 +376,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   'Hábitos de Hoje',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 TextButton(
                   onPressed: () => context.go('/habits'),
@@ -438,15 +413,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       'Nenhum hábito ativo',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.grey[400],
-                      ),
+                            color: Colors.grey[400],
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Crie seu primeiro hábito para começar sua jornada!',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[500],
-                      ),
+                      style:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.grey[500],
+                              ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
@@ -459,39 +435,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               )
             else
-              ...activeHabits.map((habit) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: HabitCard(
-                  habit: habit,
-                  onComplete: () async {
-                    await habitsProvider.completeHabit(habit.id);
-                    // Recarregar estatísticas para atualizar streak
-                    await context.read<StatsProvider>().loadStats();
-                    // Recarregar avatar também
-                    await context.read<AvatarProvider>().loadAvatar();
-                    // Verificar e recarregar conquistas
-                    try {
-                      await context.read<AchievementsProvider>().verifyAchievements();
-                    } catch (e) {
-                      print('Erro ao verificar conquistas: $e');
-                    }
-                  },
-                  onDelete: () {
-                    _showDeleteDialog(context, habit.id, habit.titulo, habitsProvider);
-                  },
+              ...activeHabits.map(
+                (habit) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: HabitCard(
+                    habit: habit,
+                    // Nova lógica: trava a conclusão se já completado hoje
+                    onComplete: (habit.completado ?? false)
+                        ? null
+                        : () async {
+                            try {
+                              await habitsProvider.completeHabit(habit.id);
+                              // Recarrega estatísticas, avatar e conquistas após completar hábito
+                              await context.read<StatsProvider>().loadStats();
+                              await context.read<AvatarProvider>().loadAvatar();
+                              await context
+                                  .read<AchievementsProvider>()
+                                  .verifyAchievements();
+                            } catch (e) {
+                              // Trata erro específico de já ter completado hoje pelo backend
+                              final message = e.toString();
+                              if (message.contains('statusCode: 404') ||
+                                  message.contains('Caminho não encontrado') ||
+                                  message.contains('já completou este hábito hoje')) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Você já completou este hábito hoje!',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                      backgroundColor: Colors.deepPurple,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                print('Erro ao concluir hábito: $e');
+                              }
+                            }
+                          },
+                    onDelete: () {
+                      _showDeleteDialog(
+                          context, habit.id, habit.titulo, habitsProvider);
+                    },
+                  ),
                 ),
-              )),
+              ),
           ],
         );
       },
     );
   }
 
+
   Widget _buildAchievementsSection() {
     return Consumer<AchievementsProvider>(
       builder: (context, achievementsProvider, child) {
-        final recentAchievements = achievementsProvider.unlockedAchievements.take(3).toList();
-        
+        final recentAchievements =
+            achievementsProvider.unlockedAchievements.take(3).toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -501,9 +503,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   'Conquistas Recentes',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 TextButton(
                   onPressed: () => context.go('/achievements'),
@@ -538,15 +540,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       'Nenhuma conquista ainda',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.grey[400],
-                      ),
+                            color: Colors.grey[400],
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Complete hábitos para desbloquear conquistas!',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[500],
-                      ),
+                      style:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.grey[500],
+                              ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -554,18 +557,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )
             else
               ...recentAchievements.map((achievement) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: AchievementBadge(
-                  achievement: achievement,
-                ),
-              )),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AchievementBadge(
+                      achievement: achievement,
+                    ),
+                  )),
           ],
         );
       },
     );
   }
 
-  void _showDeleteDialog(BuildContext context, String habitId, String habitTitle, HabitsProvider provider) {
+  void _showDeleteDialog(BuildContext context, String habitId, String habitTitle,
+      HabitsProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -591,7 +595,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Hábito "$habitTitle" deletado com sucesso!'),
+                      content:
+                          Text('Hábito "$habitTitle" deletado com sucesso!'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -600,7 +605,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Erro ao deletar hábito: ${e.toString()}'),
+                      content:
+                          Text('Erro ao deletar hábito: ${e.toString()}'),
                       backgroundColor: Colors.red,
                     ),
                   );
