@@ -58,7 +58,9 @@ class Avatar {
 
   double get progressPercentage {
     if (experienciaProximoNivel == 0) return 1.0;
-    return (experiencia / experienciaProximoNivel).clamp(0.0, 1.0);
+    // Garantir que o progresso não passe de 100%
+    final progresso = (experiencia / experienciaProximoNivel).clamp(0.0, 1.0);
+    return progresso;
   }
 
   // Retorna o asset da cabeça selecionada, se estiver configurado e válido
@@ -75,12 +77,32 @@ class AvatarProvider extends ChangeNotifier {
   Avatar? _avatar;
   bool _isLoading = false;
   String? _error;
+  Future<void>? _loadingFuture; // Rastrear requisição em andamento
 
   Avatar? get avatar => _avatar;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
   Future<void> loadAvatar() async {
+    // Se já há uma requisição em andamento, aguardar ela terminar
+    if (_loadingFuture != null) {
+      try {
+        await _loadingFuture;
+        return;
+      } catch (e) {
+        // Se a requisição anterior falhou, continuar com nova requisição
+      }
+    }
+
+    _loadingFuture = _loadAvatarInternal();
+    try {
+      await _loadingFuture;
+    } finally {
+      _loadingFuture = null;
+    }
+  }
+
+  Future<void> _loadAvatarInternal() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -95,22 +117,57 @@ class AvatarProvider extends ChangeNotifier {
         final experiencia = usuario['experiencia'] ?? 0;
         
         // Calcular XP necessário para próximo nível baseado no sistema do backend
-        // Nível 1-10: 100 XP por nível
-        // Nível 11-20: 200 XP por nível  
-        // Nível 21-30: 300 XP por nível
-        // Nível 31-40: 400 XP por nível
-        // Nível 41+: 500 XP por nível
-        int experienciaProximoNivel = 100;
+        // O backend deve fazer o upgrade de nível automaticamente quando XP passa do limite
+        // Mas precisamos calcular o XP excedente para exibir corretamente na UI
+        
+        // Calcular XP total necessário para o próximo nível
+        int xpTotalProximoNivel;
         if (nivel < 10) {
-          experienciaProximoNivel = 100; // XP necessário para passar do nível atual para o próximo
+          xpTotalProximoNivel = nivel * 100;
         } else if (nivel < 20) {
-          experienciaProximoNivel = 200;
+          xpTotalProximoNivel = (1000 + ((nivel - 10) * 200)).toInt();
         } else if (nivel < 30) {
-          experienciaProximoNivel = 300;
+          xpTotalProximoNivel = (3000 + ((nivel - 20) * 300)).toInt();
         } else if (nivel < 40) {
-          experienciaProximoNivel = 400;
+          xpTotalProximoNivel = (6000 + ((nivel - 30) * 400)).toInt();
         } else {
-          experienciaProximoNivel = 500;
+          xpTotalProximoNivel = (10000 + ((nivel - 40) * 500)).toInt();
+        }
+        
+        // Calcular XP total necessário para o nível atual
+        int xpTotalNivelAtual;
+        if (nivel <= 1) {
+          xpTotalNivelAtual = 0;
+        } else if (nivel <= 10) {
+          xpTotalNivelAtual = (nivel - 1) * 100;
+        } else if (nivel <= 20) {
+          xpTotalNivelAtual = (1000 + ((nivel - 11) * 200)).toInt();
+        } else if (nivel <= 30) {
+          xpTotalNivelAtual = (3000 + ((nivel - 21) * 300)).toInt();
+        } else if (nivel <= 40) {
+          xpTotalNivelAtual = (6000 + ((nivel - 31) * 400)).toInt();
+        } else {
+          xpTotalNivelAtual = (10000 + ((nivel - 41) * 500)).toInt();
+        }
+        
+        // Calcular XP necessário para o próximo nível (diferença)
+        int experienciaProximoNivel = xpTotalProximoNivel - xpTotalNivelAtual;
+        
+        // Se o XP passou do limite, calcular o excedente
+        // O backend deve fazer o upgrade, mas se não fez, vamos calcular o XP excedente
+        int experienciaExibida = experiencia;
+        if (experiencia >= xpTotalProximoNivel) {
+          // XP passou do limite - o backend deve ter feito upgrade
+          // Mas se não fez, vamos calcular o excedente para exibir
+          experienciaExibida = experiencia - xpTotalNivelAtual;
+          
+          // Se ainda passou do limite do próximo nível, calcular excedente
+          if (experienciaExibida >= experienciaProximoNivel) {
+            experienciaExibida = experienciaExibida % experienciaProximoNivel;
+          }
+        } else {
+          // XP normal - calcular relativo ao nível atual
+          experienciaExibida = experiencia - xpTotalNivelAtual;
         }
         
         // Converter personalizacaoAvatar corretamente (pode vir como Map<String, dynamic>)
@@ -147,7 +204,7 @@ class AvatarProvider extends ChangeNotifier {
           equipamentos: equipamentos,
           efeitos: List<String>.from(usuario['efeitos'] ?? []),
           tema: usuario['tema'] ?? 'default',
-          experiencia: experiencia,
+          experiencia: experienciaExibida.clamp(0, experienciaProximoNivel),
           experienciaProximoNivel: experienciaProximoNivel,
         );
       } else {
@@ -155,10 +212,20 @@ class AvatarProvider extends ChangeNotifier {
         _avatar = null;
       }
     } catch (e) {
-      // Não mostrar erro - apenas deixar avatar como null
-      _avatar = null;
-      // Apenas logar o erro em debug, não expor para o usuário
-      print('Erro ao carregar avatar (endpoint pode não existir): $e');
+      // Tratar erro de rate limiting especificamente
+      final errorMessage = e.toString();
+      if (errorMessage.contains('Muitas requisições') || 
+          errorMessage.contains('rate limit') ||
+          errorMessage.contains('429')) {
+        // Se for rate limiting, manter o avatar atual e não mostrar erro
+        print('Rate limit atingido ao carregar avatar. Mantendo dados atuais.');
+        // Não atualizar _avatar para manter os dados atuais
+      } else {
+        // Para outros erros, manter avatar como null silenciosamente
+        _avatar = null;
+        // Apenas logar o erro em debug, não expor para o usuário
+        print('Erro ao carregar avatar: $e');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

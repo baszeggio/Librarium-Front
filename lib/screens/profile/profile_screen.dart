@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:image_editor_plus/image_editor_plus.dart';
+import 'dart:io';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../widgets/avatar_widget.dart';
@@ -677,46 +678,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _showCropDialog(BuildContext context, String imagePath) async {
     try {
-      // Mostrar loading enquanto processa a imagem
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
+      // Usar image_editor_plus para editar a imagem
+      final editedImage = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ImageEditor(
+            image: File(imagePath),
+          ),
         ),
       );
 
-      // Fazer crop da imagem
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imagePath,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Editar Foto',
-            toolbarColor: Theme.of(context).colorScheme.primary,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-          ),
-          IOSUiSettings(
-            title: 'Editar Foto',
-            aspectRatioLockEnabled: true,
-          ),
-        ],
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 85,
-      );
-
-      // Fechar loading
-      if (context.mounted) {
-        Navigator.pop(context);
-      }
-
-      if (croppedFile != null) {
-        // Fazer upload da imagem cropada
-        await _uploadFotoPerfil(context, croppedFile.path);
+      if (editedImage != null) {
+        String? editedPath;
+        if (editedImage is File) {
+          editedPath = editedImage.path;
+        } else if (editedImage is String) {
+          editedPath = editedImage;
+        }
+        
+        if (editedPath != null) {
+          // Fazer upload da imagem editada
+          await _uploadFotoPerfil(context, editedPath);
+        }
       } else {
-        // Usuário cancelou o crop
+        // Usuário cancelou a edição
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -727,11 +712,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     } catch (e) {
-      // Fechar loading se ainda estiver aberto
-      if (context.mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

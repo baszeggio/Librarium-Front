@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image/image.dart' as img;
 
 class ApiService {
   static const String baseUrl = 'http://localhost:3000/api';
@@ -24,18 +26,36 @@ class ApiService {
   // ========== AUTH ENDPOINTS ==========
   static Future<Map<String, dynamic>> login(String email, String senha) async {
     try {
+      print('Tentando fazer login com email: $email');
+      print('URL: $baseUrl/auth/login');
+      
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'),
         headers: await _getHeaders(requiresAuth: false),
         body: jsonEncode({'email': email, 'senha': senha}),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Tempo de conexão excedido. Verifique sua internet.');
+        },
       );
+      
+      print('Status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
       
       final responseBody = response.body;
       if (responseBody.isEmpty) {
         throw Exception('Resposta vazia do servidor');
       }
       
-      final decodedResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+      Map<String, dynamic> decodedResponse;
+      try {
+        decodedResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+      } catch (e) {
+        print('Erro ao decodificar JSON: $e');
+        print('Response body: $responseBody');
+        throw Exception('Resposta inválida do servidor. Tente novamente.');
+      }
       
       // Se o status code não for 200-299, tratar como erro
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -44,13 +64,19 @@ class ApiService {
                         decodedResponse['erro'] ??
                         decodedResponse['error'] ??
                         'Erro ao fazer login (Status: ${response.statusCode})';
+        print('Erro no login: $errorMsg');
         throw Exception(errorMsg);
       }
       
+      print('Login bem-sucedido');
       return decodedResponse;
     } catch (e) {
+      print('Exceção no login: $e');
       if (e is FormatException) {
         throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      if (e.toString().contains('SocketException') || e.toString().contains('Failed host lookup')) {
+        throw Exception('Erro de conexão. Verifique se o servidor está rodando e sua internet está funcionando.');
       }
       rethrow;
     }
@@ -96,6 +122,11 @@ class ApiService {
         Uri.parse('$baseUrl/auth/perfil'),
         headers: await _getHeaders(),
       );
+      
+      if (response.statusCode == 429) {
+        // Rate limiting - retornar erro específico
+        throw Exception('Muitas requisições, tente novamente mais tarde');
+      }
       
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
@@ -152,6 +183,9 @@ class ApiService {
         throw Exception('Token não encontrado');
       }
 
+      // Otimizar imagem antes do upload
+      final optimizedPath = await _optimizeImageForUpload(filePath);
+
       // Usar multipart para upload de arquivo
       final request = http.MultipartRequest(
         'POST',
@@ -161,8 +195,8 @@ class ApiService {
       // Adicionar token de autenticação
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Adicionar arquivo
-      final file = await http.MultipartFile.fromPath('foto', filePath);
+      // Adicionar arquivo otimizado
+      final file = await http.MultipartFile.fromPath('foto', optimizedPath);
       request.files.add(file);
 
       // Enviar requisição
@@ -185,6 +219,51 @@ class ApiService {
         throw Exception('Erro ao processar resposta do servidor.');
       }
       rethrow;
+    }
+  }
+
+  // Otimiza imagem para upload (compressão + redimensionamento)
+  static Future<String> _optimizeImageForUpload(String filePath) async {
+    try {
+      // Ler arquivo original
+      final file = File(filePath);
+      final imageBytes = await file.readAsBytes();
+      
+      // Decodificar imagem
+      final originalImage = img.decodeImage(imageBytes);
+      if (originalImage == null) {
+        return filePath; // Retornar original se não conseguir decodificar
+      }
+
+      // Redimensionar se necessário (máximo 800x800)
+      const maxSize = 800;
+      img.Image resizedImage = originalImage;
+      if (originalImage.width > maxSize || originalImage.height > maxSize) {
+        final ratio = originalImage.width > originalImage.height
+            ? maxSize / originalImage.width
+            : maxSize / originalImage.height;
+        
+        resizedImage = img.copyResize(
+          originalImage,
+          width: (originalImage.width * ratio).round(),
+          height: (originalImage.height * ratio).round(),
+          maintainAspect: true,
+        );
+      }
+
+      // Comprimir para JPEG com qualidade 85%
+      final compressedBytes = img.encodeJpg(resizedImage, quality: 85);
+      
+      // Salvar em arquivo temporário
+      final tempDir = await Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/optimized_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(compressedBytes);
+      
+      return tempFile.path;
+    } catch (e) {
+      // Se houver erro na otimização, retornar arquivo original
+      print('Erro ao otimizar imagem: $e');
+      return filePath;
     }
   }
 
@@ -324,20 +403,97 @@ class ApiService {
 
   // ========== ACHIEVEMENTS ENDPOINTS ==========
   static Future<List<dynamic>> getAchievements() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/conquistas'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data['conquistas'] ?? [];
+    try {
+      // Tentar primeiro o endpoint de conquistas do usuário
+      print('Tentando buscar conquistas do usuário...');
+      try {
+        final userResponse = await http.get(
+          Uri.parse('$baseUrl/usuarios/conquistas'),
+          headers: await _getHeaders(),
+        );
+        
+        if (userResponse.statusCode >= 200 && userResponse.statusCode < 300) {
+          final userData = jsonDecode(userResponse.body);
+          final userAchievements = userData['conquistas'] ?? [];
+          if (userAchievements.isNotEmpty) {
+            print('Conquistas do usuário encontradas: ${userAchievements.length}');
+            return userAchievements;
+          }
+        }
+      } catch (e) {
+        print('Erro ao buscar conquistas do usuário: $e');
+      }
+      
+      // Se não encontrar, tentar o endpoint geral
+      print('Tentando buscar conquistas gerais...');
+      final response = await http.get(
+        Uri.parse('$baseUrl/conquistas'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Se houver erro HTTP, retornar lista vazia para que o provider use dados mockados
+        print('Erro ao buscar conquistas: ${response.statusCode}');
+        return [];
+      }
+      
+      final data = jsonDecode(response.body);
+      final achievements = data['conquistas'] ?? [];
+      print('Conquistas gerais encontradas: ${achievements.length}');
+      return achievements;
+    } catch (e) {
+      if (e is FormatException) {
+        print('Erro ao processar resposta de conquistas: $e');
+        return [];
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> verifyAchievements() async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/conquistas/verificar'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      print('Chamando endpoint: $baseUrl/conquistas/verificar');
+      final response = await http.post(
+        Uri.parse('$baseUrl/conquistas/verificar'),
+        headers: await _getHeaders(),
+      );
+      
+      print('Status code da verificação: ${response.statusCode}');
+      print('Body da resposta: ${response.body}');
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Se houver erro HTTP, retornar um mapa indicando que não houve sucesso
+        // mas ainda permitir que o provider recarregue as conquistas
+        try {
+          final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+          print('Erro na verificação: ${decodedResponse['mensagem'] ?? decodedResponse['message']}');
+          return {
+            'sucesso': false,
+            'success': false,
+            'mensagem': decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        'Erro ao verificar conquistas',
+          };
+        } catch (e) {
+          print('Erro ao decodificar resposta de erro: $e');
+          return {
+            'sucesso': false,
+            'success': false,
+            'mensagem': 'Erro ao verificar conquistas (status ${response.statusCode})',
+          };
+        }
+      }
+      
+      final decoded = jsonDecode(response.body);
+      print('Resposta decodificada: $decoded');
+      return decoded as Map<String, dynamic>;
+    } catch (e) {
+      print('Exceção ao verificar conquistas: $e');
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getAchievementStats() async {
@@ -914,12 +1070,22 @@ class ApiService {
   static Future<List<dynamic>> searchUsers(String query) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/multiplayer/buscar-usuarios?query=$query'),
+        Uri.parse('$baseUrl/multiplayer/buscar-usuarios?query=${Uri.encodeComponent(query)}'),
         headers: await _getHeaders(),
       );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Erro ao buscar usuários: ${response.statusCode}');
+      }
+      
       final data = jsonDecode(response.body);
-      return data['usuarios'] ?? [];
+      if (data is Map && data.containsKey('usuarios')) {
+        return List<dynamic>.from(data['usuarios'] ?? []);
+      }
+      return [];
     } catch (e) {
+      // Retornar lista vazia em caso de erro para não quebrar a UI
+      print('Erro ao buscar usuários: $e');
       return [];
     }
   }

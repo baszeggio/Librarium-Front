@@ -446,9 +446,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         : () async {
                             try {
                               await habitsProvider.completeHabit(habit.id);
+                              // Aguardar um pouco para o backend processar
+                              await Future.delayed(const Duration(milliseconds: 500));
                               // Recarrega estatísticas, avatar e conquistas após completar hábito
-                              await context.read<StatsProvider>().loadStats();
-                              await context.read<AvatarProvider>().loadAvatar();
+                              // Executar em paralelo para reduzir tempo total, mas com delay entre elas
+                              await Future.wait([
+                                context.read<StatsProvider>().loadStats(),
+                                context.read<AvatarProvider>().loadAvatar(),
+                              ]);
+                              // Verificar conquistas por último, pois pode demorar mais
                               await context
                                   .read<AchievementsProvider>()
                                   .verifyAchievements();
