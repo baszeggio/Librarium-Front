@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../providers/habits_provider.dart';
@@ -12,6 +11,8 @@ import '../../widgets/habit_card.dart';
 import '../../widgets/stats_card.dart';
 import '../../widgets/achievement_badge.dart';
 import '../../widgets/custom_bottom_nav.dart';
+import '../../services/api_service.dart';
+import '../ranking/ranking_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,12 +22,55 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  List<dynamic> _topRanking = [];
+  Map<String, dynamic>? _userRanking;
+  bool _loadingRanking = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
+      _loadRanking();
     });
+  }
+
+  Future<void> _loadRanking() async {
+    setState(() => _loadingRanking = true);
+    try {
+      final response = await ApiService.getMultiplayerRanking();
+      print('Resposta do ranking: $response');
+      
+      final rankingData = response['ranking'] ?? [];
+      final usuarioAtual = response['usuarioAtual'];
+      
+      print('Ranking data: $rankingData (tipo: ${rankingData.runtimeType})');
+      print('Usuário atual: $usuarioAtual');
+      
+      setState(() {
+        // Pegar apenas os top 5 para o dashboard
+        if (rankingData is List && rankingData.isNotEmpty) {
+          _topRanking = rankingData.take(5).toList();
+          print('Top ranking carregado: ${_topRanking.length} jogadores');
+        } else {
+          _topRanking = [];
+          print('Ranking vazio ou inválido');
+        }
+        
+        if (usuarioAtual is Map && usuarioAtual.isNotEmpty) {
+          _userRanking = Map<String, dynamic>.from(usuarioAtual);
+          print('Ranking do usuário carregado: posição ${_userRanking!['posicao']}');
+        } else {
+          _userRanking = null;
+          print('Ranking do usuário não disponível');
+        }
+        _loadingRanking = false;
+      });
+    } catch (e, stackTrace) {
+      setState(() => _loadingRanking = false);
+      print('Erro ao carregar ranking: $e');
+      print('Stack trace: $stackTrace');
+    }
   }
 
   Future<void> _loadData() async {
@@ -124,6 +168,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 24),
           // Conquistas recentes
           _buildAchievementsSection(),
+          const SizedBox(height: 24),
+          // Ranking
+          _buildRankingSection(),
         ],
       ),
     );
@@ -662,6 +709,316 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildRankingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Ranking Global',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RankingScreen(),
+                ),
+              ),
+              child: Text(
+                'Ver Completo',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_loadingRanking)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_topRanking.isEmpty && _userRanking == null)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.grey.withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.emoji_events,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Nenhum jogador no ranking ainda',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.grey[400],
+                      ),
+                ),
+              ],
+            ),
+          )
+        else
+          Column(
+            children: [
+              // Top 3 com destaque
+              if (_topRanking.length >= 3)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTopRankingCard(_topRanking[1], 2, Colors.grey[400]!),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildTopRankingCard(_topRanking[0], 1, Colors.amber),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildTopRankingCard(_topRanking[2], 3, Colors.brown[400]!),
+                    ),
+                  ],
+                ),
+              if (_topRanking.length >= 3) const SizedBox(height: 12),
+              // Resto do top 5
+              ..._topRanking.skip(3).map((player) {
+                final position = _topRanking.indexOf(player) + 1;
+                return _buildRankingCard(player, position);
+              }),
+              // Posição do usuário (sempre mostrar se disponível)
+              if (_userRanking != null)
+                Padding(
+                  padding: EdgeInsets.only(top: _topRanking.isNotEmpty ? 12 : 0),
+                  child: _buildUserRankingCard(),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTopRankingCard(dynamic player, int position, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Column(
+        children: [
+          Text(
+            position == 1 ? '🥇' : position == 2 ? '🥈' : '🥉',
+            style: const TextStyle(fontSize: 24),
+          ),
+          const SizedBox(height: 8),
+          AvatarWidget(
+            avatar: null,
+            size: 40,
+            fotoPerfilUrl: player['fotoPerfil'],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            player['nomeUsuario'] ?? 'Jogador',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Nível ${player['nivel'] ?? 0}',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRankingCard(dynamic player, int position) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            alignment: Alignment.center,
+            child: Text(
+              '$position',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          AvatarWidget(
+            avatar: null,
+            size: 40,
+            fotoPerfilUrl: player['fotoPerfil'],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  player['nomeUsuario'] ?? 'Jogador',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.star, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Nível ${player['nivel'] ?? 0}',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.trending_up, size: 14, color: Colors.blue),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${player['experiencia'] ?? 0} XP',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserRankingCard() {
+    if (_userRanking == null) return const SizedBox.shrink();
+    
+    final position = _userRanking!['posicao'] ?? '?';
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            alignment: Alignment.center,
+            child: Text(
+              '#$position',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, _) {
+              return AvatarWidget(
+                avatar: null,
+                size: 40,
+                fotoPerfilUrl: authProvider.user?['fotoPerfil'],
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Você',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.star, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Nível ${_userRanking!['nivel'] ?? 0}',
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.trending_up, size: 14, color: Colors.blue),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_userRanking!['experiencia'] ?? 0} XP',
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

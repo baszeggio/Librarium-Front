@@ -166,8 +166,47 @@ class AuthProvider extends ChangeNotifier {
             await logout();
           }
         } catch (e) {
-          // Erro ao verificar token, limpar dados
-          await logout();
+          // Verificar se é erro de autenticação (401/403) ou apenas erro de validação (400)
+          bool isAuthError = false;
+          
+          // Verificar se é ApiHttpException com status code de autenticação
+          if (e is ApiHttpException) {
+            isAuthError = e.isAuthError; // 401 ou 403
+          } else {
+            // Verificar pela mensagem de erro
+            final errorString = e.toString().toLowerCase();
+            isAuthError = errorString.contains('401') || 
+                         errorString.contains('403') ||
+                         errorString.contains('unauthorized') ||
+                         errorString.contains('forbidden') ||
+                         errorString.contains('token inválido') ||
+                         errorString.contains('token expirado') ||
+                         errorString.contains('invalid token');
+          }
+          
+          // Só fazer logout se for erro de autenticação
+          // Erros 400 (Bad Request) não devem desconectar o usuário
+          if (isAuthError) {
+            print('Erro de autenticação detectado (401/403), fazendo logout: $e');
+            await logout();
+          } else {
+            // Erro 400 ou outro erro não relacionado à autenticação
+            // Manter usuário logado, apenas carregar dados do storage se existirem
+            print('Erro não relacionado à autenticação (400 ou outro), mantendo sessão: $e');
+            try {
+              final userJson = prefs.getString('user');
+              if (userJson != null) {
+                _user = jsonDecode(userJson);
+                _isAuthenticated = true;
+              } else {
+                // Se não tem dados salvos, mas tem token, manter autenticado
+                _isAuthenticated = true;
+              }
+            } catch (_) {
+              // Se não conseguir carregar do storage, manter token mas sem dados do usuário
+              _isAuthenticated = true; // Token existe, então está autenticado
+            }
+          }
         }
       } else {
         _isAuthenticated = false;

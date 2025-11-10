@@ -22,12 +22,22 @@ class AvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Usar Consumer para escutar mudanças do AuthProvider
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        // Obter foto de perfil do AuthProvider se não fornecida
-        final fotoPerfil = fotoPerfilUrl ?? 
-            (authProvider.user?['fotoPerfil'] as String?);
+        // Se fotoPerfilUrl foi passado (mesmo que null), usar APENAS ele
+        // Não fazer fallback para foto do usuário logado quando mostrando avatar de outra pessoa
+        // O fallback só acontece quando fotoPerfilUrl não é passado (null) E useLoggedUserPhotoAsFallback é true
+        final String? fotoPerfil;
+        
+        if (fotoPerfilUrl != null) {
+          // Se fotoPerfilUrl foi passado, usar APENAS ele (mesmo que seja string vazia)
+          // Não fazer fallback para foto do usuário logado - isso garante que mostramos
+          // a foto correta da pessoa específica (ranking, mensagens, etc)
+          fotoPerfil = fotoPerfilUrl!.isEmpty ? null : fotoPerfilUrl;
+        } else {
+          // Se fotoPerfilUrl não foi passado, usar foto do usuário logado (para o próprio perfil)
+          fotoPerfil = authProvider.user?['fotoPerfil'] as String?;
+        }
         
         // Se tiver foto de perfil, mostrar ela (prioridade sobre avatar)
         if (fotoPerfil != null && fotoPerfil.isNotEmpty) {

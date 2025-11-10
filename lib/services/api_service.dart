@@ -1,7 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image/image.dart' as img;
+
+// Exceção customizada para incluir status code HTTP
+class ApiHttpException implements Exception {
+  final String message;
+  final int? statusCode;
+  
+  ApiHttpException(this.message, {this.statusCode});
+  
+  @override
+  String toString() => message;
+  
+  bool get isUnauthorized => statusCode == 401;
+  bool get isForbidden => statusCode == 403;
+  bool get isBadRequest => statusCode == 400;
+  bool get isAuthError => isUnauthorized || isForbidden;
+}
 
 class ApiService {
   static const String baseUrl = 'http://192.168.0.107:3000/api';
@@ -100,13 +118,15 @@ class ApiService {
       );
       
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Criar exceção com status code para tratamento diferenciado
         final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
         final errorMsg = decodedResponse['mensagem'] ?? 
                         decodedResponse['message'] ?? 
                         decodedResponse['erro'] ??
                         decodedResponse['error'] ??
                         'Erro ao carregar perfil';
-        throw Exception(errorMsg);
+        final exception = ApiHttpException(errorMsg, statusCode: response.statusCode);
+        throw exception;
       }
       
       return jsonDecode(response.body);
@@ -154,14 +174,24 @@ class ApiService {
       }
 
       // Verificar tamanho do arquivo (máximo 5MB)
-      final fileSize = await file.length();
-      if (fileSize > 5 * 1024 * 1024) {
+      final originalSize = await file.length();
+      if (originalSize > 5 * 1024 * 1024) {
         throw Exception('Arquivo muito grande. Máximo permitido: 5MB');
       }
 
-      if (fileSize == 0) {
+      if (originalSize == 0) {
         throw Exception('Arquivo de imagem está vazio');
       }
+
+      print('Iniciando otimização de imagem: $filePath (${originalSize} bytes)');
+
+      // Otimizar a imagem antes do upload
+      final optimizedBytes = await _optimizeImage(filePath);
+      if (optimizedBytes == null) {
+        throw Exception('Erro ao otimizar imagem');
+      }
+
+      print('Imagem otimizada: ${originalSize} bytes -> ${optimizedBytes.length} bytes (${((1 - optimizedBytes.length / originalSize) * 100).toStringAsFixed(1)}% de redução)');
 
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
@@ -169,8 +199,6 @@ class ApiService {
       if (token == null) {
         throw Exception('Token não encontrado. Faça login novamente.');
       }
-
-      print('Iniciando upload de foto: $filePath (${fileSize} bytes)');
 
       // Usar multipart para upload de arquivo
       final request = http.MultipartRequest(
@@ -204,19 +232,17 @@ class ApiService {
             contentType = 'image/jpeg'; // Fallback
         }
 
-        print('Tipo MIME detectado: $contentType para extensão: $extension');
+        print('Tipo MIME detectado: $contentType para extensão: jpg (sempre JPEG após otimização)');
 
-        // Criar MultipartFile usando fromPath (que detecta automaticamente o tipo)
-        // O importante é garantir que o nome do arquivo tenha a extensão correta
-        // O Multer no backend verifica tanto o mimetype quanto a extensão do nome do arquivo
-        final multipartFile = await http.MultipartFile.fromPath(
+        // Criar MultipartFile usando os bytes otimizados
+        final multipartFile = http.MultipartFile.fromBytes(
           'foto',
-          filePath,
-          filename: 'foto.$extension', // Garantir que o nome do arquivo tenha extensão correta
+          optimizedBytes,
+          filename: 'foto.jpg', // Sempre JPEG após otimização
         );
         
         request.files.add(multipartFile);
-        print('Arquivo adicionado ao request: ${multipartFile.filename} (Extensão: .$extension, Tamanho: ${await file.length()} bytes)');
+        print('Arquivo otimizado adicionado ao request: ${multipartFile.filename} (Tamanho: ${optimizedBytes.length} bytes)');
       } catch (fileError) {
         print('Erro ao criar MultipartFile: $fileError');
         throw Exception('Erro ao processar arquivo de imagem: ${fileError.toString()}');
@@ -246,7 +272,8 @@ class ApiService {
               : 'Erro HTTP ${response.statusCode}';
         }
         
-        throw Exception(errorMsg);
+        // Usar ApiHttpException para manter consistência
+        throw ApiHttpException(errorMsg, statusCode: response.statusCode);
       }
 
       final responseData = jsonDecode(response.body);
@@ -270,6 +297,50 @@ class ApiService {
       }
       
       rethrow;
+    }
+  }
+
+  /// Otimiza uma imagem antes do upload
+  /// Redimensiona para máximo 800x800 e comprime para JPEG com qualidade 85
+  static Future<Uint8List?> _optimizeImage(String filePath) async {
+    try {
+      final file = File(filePath);
+      final imageBytes = await file.readAsBytes();
+      final originalImage = img.decodeImage(imageBytes);
+      
+      if (originalImage == null) {
+        print('Erro: Não foi possível decodificar a imagem');
+        return null;
+      }
+
+      // Redimensionar se necessário (máximo 800x800 mantendo proporção)
+      img.Image resizedImage = originalImage;
+      const int maxSize = 800;
+      
+      if (originalImage.width > maxSize || originalImage.height > maxSize) {
+        if (originalImage.width > originalImage.height) {
+          resizedImage = img.copyResize(
+            originalImage,
+            width: maxSize,
+            maintainAspect: true,
+          );
+        } else {
+          resizedImage = img.copyResize(
+            originalImage,
+            height: maxSize,
+            maintainAspect: true,
+          );
+        }
+        print('Imagem redimensionada: ${originalImage.width}x${originalImage.height} -> ${resizedImage.width}x${resizedImage.height}');
+      }
+
+      // Converter para JPEG com qualidade 85 (boa qualidade, tamanho reduzido)
+      final optimizedBytes = img.encodeJpg(resizedImage, quality: 85);
+      
+      return Uint8List.fromList(optimizedBytes);
+    } catch (e) {
+      print('Erro ao otimizar imagem: $e');
+      return null;
     }
   }
 
@@ -812,6 +883,15 @@ class ApiService {
     return data['batalhas'] ?? [];
   }
 
+  static Future<List<dynamic>> getPendingBattles() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/batalha/pendentes'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['batalhas'] ?? [];
+  }
+
   static Future<Map<String, dynamic>> createBattle(Map<String, dynamic> battleData) async {
     final response = await http.post(
       Uri.parse('$baseUrl/multiplayer/batalha/criar'),
@@ -1009,6 +1089,20 @@ class ApiService {
     }
   }
 
+  static Future<List<dynamic>> listarConversas() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/mensagem/conversas'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['conversas'] ?? [];
+    } catch (e) {
+      print('Erro ao listar conversas: $e');
+      return [];
+    }
+  }
+
   static Future<Map<String, dynamic>> getMessageStats() async {
     final response = await http.get(
       Uri.parse('$baseUrl/multiplayer/mensagem/estatisticas'),
@@ -1019,12 +1113,24 @@ class ApiService {
 
   // Ranking e Estatísticas
   static Future<Map<String, dynamic>> getMultiplayerRanking() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/multiplayer/ranking'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data is Map ? Map<String, dynamic>.from(data) : {'ranking': [], 'usuarioAtual': null};
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/ranking'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        print('Erro ao buscar ranking: ${response.statusCode} - ${response.body}');
+        return {'ranking': [], 'usuarioAtual': null};
+      }
+      
+      final data = jsonDecode(response.body);
+      print('Ranking recebido: ${data['ranking']?.length ?? 0} jogadores');
+      return data is Map ? Map<String, dynamic>.from(data) : {'ranking': [], 'usuarioAtual': null};
+    } catch (e) {
+      print('Erro ao buscar ranking: $e');
+      return {'ranking': [], 'usuarioAtual': null};
+    }
   }
 
   static Future<Map<String, dynamic>> getMultiplayerStats() async {
