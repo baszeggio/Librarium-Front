@@ -474,7 +474,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
     showDialog(
       context: context,
-      useRootNavigator: true,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -484,8 +483,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 'Buscar Usuários',
                 style: TextStyle(color: Colors.white),
               ),
-              content: SizedBox(
-                width: double.maxFinite,
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -504,20 +502,16 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         try {
                           final results = await ApiService.searchUsers(value.trim());
                           setState(() {
-                            searchResults = results ?? [];
+                            searchResults = results;
                             isSearching = false;
                           });
                         } catch (e) {
-                          setState(() {
-                            searchResults = [];
-                            isSearching = false;
-                          });
+                          setState(() => isSearching = false);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Erro ao buscar usuários: ${e.toString()}'),
+                                content: Text('Erro: ${e.toString()}'),
                                 backgroundColor: Colors.red,
-                                duration: const Duration(seconds: 3),
                               ),
                             );
                           }
@@ -531,10 +525,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                       ),
                     if (searchResults.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 300),
+                      SizedBox(
+                        height: 300,
                         child: ListView.builder(
-                          shrinkWrap: true,
                           itemCount: searchResults.length,
                           itemBuilder: (context, index) {
                             final user = searchResults[index];
@@ -625,19 +618,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               color: Colors.blue,
               onPressed: () async {
                 try {
-                  // Garantir que user é um Map e obter o ID corretamente
-                  String? userId;
-                  if (user is Map) {
-                    userId = user['_id'] ?? user['id'];
-                  } else if (user is String) {
-                    userId = user;
-                  }
-                  
-                  if (userId == null || userId.isEmpty) {
-                    throw Exception('ID do usuário não encontrado');
-                  }
-                  
-                  await context.read<FriendsProvider>().sendFriendRequest(userId);
+                  await context.read<FriendsProvider>().sendFriendRequest(user['_id'] ?? user['id']);
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(

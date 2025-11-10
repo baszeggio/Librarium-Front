@@ -5,6 +5,21 @@ import '../../providers/achievements_provider.dart';
 import '../../widgets/custom_button.dart';
 import 'edit_habit_screen.dart';
 
+// Métodos utilitários para lógica de "completar hábito"
+bool canCompleteHabit(Habit habit) {
+  // O hábito só pode ser concluído se não foi completado hoje e está ativo.
+  if (!habit.ativo) return false;
+  if (habit.completado == true) return false;
+  // (Expanda essa lógica caso haja mais regras no futuro)
+  return true;
+}
+
+String? getCannotCompleteReason(Habit habit) {
+  if (!habit.ativo) return "Hábito inativo. Ative-o para marcar como concluído.";
+  if (habit.completado == true) return "Este hábito já foi concluído hoje.";
+  return null;
+}
+
 class HabitDetailScreen extends StatefulWidget {
   final String habitId;
 
@@ -214,8 +229,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                           // Ação rápida
                           Builder(
                             builder: (context) {
-                              final canComplete = habitsProvider.canCompleteHabit(habit);
-                              final reason = habitsProvider.getCannotCompleteReason(habit);
+                              final canComplete = canCompleteHabit(habit);
+                              final reason = getCannotCompleteReason(habit);
                               
                               return CustomButton(
                                 text: habit.completado == true 
@@ -249,7 +264,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                           if (habit.completado == true) ...[
                             const SizedBox(height: 8),
                             Text(
-                              habitsProvider.getCannotCompleteReason(habit) ?? 'Hábito já concluído',
+                              getCannotCompleteReason(habit) ?? 'Hábito já concluído',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: Colors.grey[400],
                                 fontStyle: FontStyle.italic,
@@ -457,4 +472,3 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 }
-

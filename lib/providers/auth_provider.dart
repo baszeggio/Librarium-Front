@@ -19,54 +19,37 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('AuthProvider: Iniciando login...');
-      
       // Limpar dados antigos antes de tentar login
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('token');
       await prefs.remove('user');
       
       final response = await ApiService.login(email, senha);
-      print('AuthProvider: Resposta recebida: $response');
       
       // Verificar tanto 'sucesso' quanto 'success'
       final sucesso = response['sucesso'] == true || response['success'] == true;
-      print('AuthProvider: Sucesso: $sucesso');
       
       if (sucesso) {
-        _token = response['token'] ?? response['accessToken'] ?? response['access_token'];
-        _user = response['usuario'] ?? response['user'] ?? response['data'];
+        _token = response['token'];
+        _user = response['usuario'] ?? response['user'];
         _isAuthenticated = true;
-        
-        print('AuthProvider: Token: ${_token != null ? "presente" : "ausente"}');
-        print('AuthProvider: User: ${_user != null ? "presente" : "ausente"}');
         
         // Salvar token no SharedPreferences
         if (_token != null) {
           await prefs.setString('token', _token!);
-          print('AuthProvider: Token salvo no SharedPreferences');
-        } else {
-          print('AuthProvider: AVISO - Token não encontrado na resposta!');
         }
         if (_user != null) {
           await prefs.setString('user', jsonEncode(_user));
-          print('AuthProvider: User salvo no SharedPreferences');
-        } else {
-          print('AuthProvider: AVISO - User não encontrado na resposta!');
         }
-        
-        print('AuthProvider: Login concluído com sucesso');
       } else {
         final errorMsg = response['mensagem'] ?? 
                         response['message'] ?? 
                         response['erro'] ??
                         response['error'] ??
                         'Erro ao fazer login';
-        print('AuthProvider: Erro no login: $errorMsg');
         throw Exception(errorMsg);
       }
     } catch (e) {
-      print('AuthProvider: Exceção capturada: $e');
       _isAuthenticated = false;
       _user = null;
       _token = null;
@@ -76,7 +59,6 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('token');
         await prefs.remove('user');
-        print('AuthProvider: Dados limpos do SharedPreferences');
       } catch (_) {}
       
       rethrow;

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_editor_plus/image_editor_plus.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
@@ -18,10 +19,11 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isUploading = false;
+
   @override
   void initState() {
     super.initState();
-    // Carregar avatar quando a tela é aberta
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AvatarProvider>().loadAvatar();
     });
@@ -55,50 +57,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-              // Header
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        // Se não pode voltar, vai para dashboard
-                        context.go('/dashboard');
-                      }
-                    },
-                    icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
-                  ),
+          Row(
+            children: [
+              IconButton(
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    context.go('/dashboard');
+                  }
+                },
+                icon: const Icon(Icons.arrow_back),
+                color: Colors.white,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Perfil',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
-          // Avatar e informações do usuário
           _buildUserInfo(),
-
           const SizedBox(height: 24),
-
-          // Estatísticas do avatar
           _buildAvatarStats(),
-
           const SizedBox(height: 24),
-
-          // Configurações
           _buildSettingsSection(),
-
           const SizedBox(height: 24),
-
-          // Botão de logout
           _buildLogoutButton(),
         ],
       ),
@@ -106,8 +94,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildUserInfo() {
-    return Consumer<AvatarProvider>(
-      builder: (context, avatarProvider, child) {
+    return Consumer2<AuthProvider, AvatarProvider>(
+      builder: (context, authProvider, avatarProvider, child) {
+        final fotoPerfil = authProvider.user?['fotoPerfil'] as String?;
+        final nomeUsuario = authProvider.user?['nomeUsuario'] ??
+            authProvider.user?['nome'] ??
+            'Guerreiro';
+        final userId = authProvider.user?['_id']?.toString() ??
+            authProvider.user?['id']?.toString() ??
+            '';
+        final shortId = userId.length > 8 ? userId.substring(0, 8) : userId;
+        final email = authProvider.user?['email'] ?? 'Não disponível';
+        final tituloUsuario = authProvider.user?['titulo'] ?? 'Aspirante';
+
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -124,115 +123,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: Column(
             children: [
-              // Avatar (foto baseada na cor escolhida na customização)
-              Stack(
-                children: [
-                  Consumer<AuthProvider>(
-                    builder: (context, authProvider, child) {
-                      final fotoPerfil = authProvider.user?['fotoPerfil'] as String?;
-                      return AvatarWidget(
-                        avatar: avatarProvider.avatar,
-                        size: 100,
-                        showLevel: true,
-                        fotoPerfilUrl: fotoPerfil,
-                      );
-                    },
-                  ),
-                  // Botão para alterar foto
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 2,
-                        ),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.camera_alt, size: 20),
-                        color: Colors.white,
-                        onPressed: () => _showFotoPerfilDialog(context),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
+              Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AvatarWidget(
+                      avatar: avatarProvider.avatar,
+                      size: 100,
+                      showLevel: true,
+                      fotoPerfilUrl: fotoPerfil,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              
-              const SizedBox(height: 20),
-              
-              // Nome do usuário com ID
-              Consumer<AuthProvider>(
-                builder: (context, authProvider, child) {
-                  final nomeUsuario = authProvider.user?['nomeUsuario'] ?? 
-                                    authProvider.user?['nome'] ?? 
-                                    'Guerreiro';
-                  final userId = authProvider.user?['_id']?.toString() ?? 
-                               authProvider.user?['id']?.toString() ?? '';
-                  final shortId = userId.length > 8 ? userId.substring(0, 8) : userId;
-                  
-                  return Column(
-                    children: [
-                      Text(
-                        nomeUsuario,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+              const SizedBox(height: 16),
+              Text(
+                nomeUsuario,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              if (shortId.isNotEmpty)
+                Text(
+                  '#$shortId',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[400],
+                        fontFamily: 'monospace',
                       ),
-                      if (shortId.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '#$shortId',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[400],
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-              
+                ),
               const SizedBox(height: 8),
-              
-              // Título do avatar (priorizar título do backend)
-              Consumer<AuthProvider>(
-                builder: (context, authProvider, child) {
-                  // Prioridade: 1. Título do usuário (backend), 2. Título calculado do avatar
-                  final tituloUsuario = authProvider.user?['titulo'];
-                  final tituloAvatar = avatarProvider.avatar?.title;
-                  final titulo = tituloUsuario?.toString().isNotEmpty == true
-                      ? tituloUsuario.toString()
-                      : (tituloAvatar ?? 'Aspirante');
-                  return Text(
-                    titulo,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              Text(
+                tituloUsuario,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.w600,
                     ),
-                  );
-                },
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Email
-              Consumer<AuthProvider>(
-                builder: (context, authProvider, child) {
-                  final email = authProvider.user?['email'] ?? 'Não disponível';
-                  return Text(
-                    email,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              const SizedBox(height: 8),
+              Text(
+                email,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey[400],
                     ),
-                  );
-                },
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showFotoPerfilDialog(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Alterar Foto',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
               ),
             ],
           ),
@@ -240,7 +191,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
   }
-
 
   Widget _buildAvatarStats() {
     return Consumer<AvatarProvider>(
@@ -250,7 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         final avatar = avatarProvider.avatar!;
-        
+
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -266,14 +216,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(
                 'Estatísticas do Avatar',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
-              
               const SizedBox(height: 16),
-              
-              // Nível e XP
               Row(
                 children: [
                   Expanded(
@@ -294,10 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 16),
-              
-              // Barra de progresso
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -307,15 +251,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         'Progresso para o próximo nível',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[400],
-                        ),
+                              color: Colors.grey[400],
+                            ),
                       ),
                       Text(
                         '${avatar.experiencia}/${avatar.experienciaProximoNivel}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ],
                   ),
@@ -329,7 +273,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              
             ],
           ),
         );
@@ -354,15 +297,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.grey[400],
-            ),
+                  color: Colors.grey[400],
+                ),
           ),
         ],
       ),
@@ -385,70 +328,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             'Configurações',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
           ),
-          
           const SizedBox(height: 16),
-          
-          _buildSettingItem(
-            icon: Icons.palette,
-            title: 'Tema',
-            subtitle: 'Personalizar aparência',
+          ListTile(
+            leading: const Icon(Icons.lock, color: Colors.white70),
+            title: const Text(
+              'Segurança da Conta',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Gerencie senha e autenticação',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
             onTap: () {
-              _showThemeDialog();
-            },
-          ),
-          
-          _buildSettingItem(
-            icon: Icons.palette,
-            title: 'Customizar Personagem',
-            subtitle: 'Personalize a aparência do seu avatar',
-            onTap: () {
-              context.go('/customization');
-            },
-          ),
-          
-          _buildSettingItem(
-            icon: Icons.help,
-            title: 'Ajuda',
-            subtitle: 'Central de ajuda e suporte',
-            onTap: () {
-              _showHelpDialog();
+              // exemplo: context.go('/seguranca');
             },
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSettingItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey[400]),
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: Colors.white,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.grey[400],
-        ),
-      ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: Colors.grey[400],
-        size: 16,
-      ),
-      onTap: onTap,
     );
   }
 
@@ -499,102 +399,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showThemeDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text(
-          'Tema',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'O tema escuro está ativo. Personalização de tema estará disponível em breve!',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showHelpDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text(
-          'Central de Ajuda',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHelpSection(
-                'Como criar hábitos?',
-                'Vá para a seção de Hábitos e clique no botão "+" para criar um novo hábito.',
-              ),
-              const SizedBox(height: 16),
-              _buildHelpSection(
-                'Como completar hábitos?',
-                'Clique no card do hábito no dashboard ou na lista de hábitos para marcá-lo como concluído.',
-              ),
-              const SizedBox(height: 16),
-              _buildHelpSection(
-                'O que é sequência?',
-                'A sequência é o número de dias consecutivos que você completou pelo menos um hábito.',
-              ),
-              const SizedBox(height: 16),
-              _buildHelpSection(
-                'Como ganhar XP?',
-                'Você ganha XP ao completar hábitos. Cada hábito dá uma quantidade diferente de XP baseada na dificuldade.',
-              ),
-              const SizedBox(height: 16),
-              _buildHelpSection(
-                'Como customizar meu avatar?',
-                'Vá em Configurações > Customizar Personagem para escolher a cor do seu personagem.',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHelpSection(String question, String answer) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          question,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          answer,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.grey[400],
-          ),
-        ),
-      ],
-    );
-  }
-
   void _showFotoPerfilDialog(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -610,17 +414,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ListTile(
               leading: const Icon(Icons.photo_library, color: Colors.white),
               title: const Text('Escolher da Galeria', style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(context, ImageSource.gallery);
+              onTap: () async {
+                Navigator.pop(context); // fecha o bottomsheet antes de aguardar
+                await _pickImage(context, ImageSource.gallery);
               },
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt, color: Colors.white),
               title: const Text('Tirar Foto', style: TextStyle(color: Colors.white)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                _pickImage(context, ImageSource.camera);
+                await _pickImage(context, ImageSource.camera);
               },
             ),
             Consumer<AuthProvider>(
@@ -652,23 +456,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
     try {
+      // Garantir permissões corretas e await de Navigator.pop()
+      late Permission permission;
+      if (source == ImageSource.camera) {
+        permission = Permission.camera;
+      } else if (Platform.isIOS) {
+        permission = Permission.photos; // iOS uses "photos"
+      } else {
+        permission = Permission.storage; // Android 13+: use storage
+      }
+      var status = await permission.request();
+      if (!status.isGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                source == ImageSource.camera
+                    ? 'Permissão de câmera negada'
+                    : 'Permissão de galeria negada'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: source,
+        imageQuality: 90,
         maxWidth: 2000,
         maxHeight: 2000,
-        imageQuality: 90,
       );
 
-      if (image != null) {
-        // Mostrar dialog de crop/edit
-        await _showCropDialog(context, image.path);
+      if (image == null) {
+        return;
       }
+      // Garante que contexto está montado antes de continuar
+      if (!mounted) return;
+
+      // Abrir cropper
+      await _showCropDialog(context, image.path);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao selecionar imagem: ${e.toString()}'),
+            content: Text('Erro ao selecionar imagem: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -678,54 +509,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _showCropDialog(BuildContext context, String imagePath) async {
     try {
-      // Usar image_editor_plus para editar a imagem
-      final editedImage = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ImageEditor(
-            image: File(imagePath),
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: imagePath,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Editar Foto',
+            toolbarColor: Theme.of(context).colorScheme.primary,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            hideBottomControls: false,
           ),
-        ),
+          IOSUiSettings(
+            title: 'Editar Foto',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+        compressQuality: 90,
+        compressFormat: ImageCompressFormat.jpg,
       );
 
-      if (editedImage != null) {
-        String? editedPath;
-        if (editedImage is File) {
-          editedPath = editedImage.path;
-        } else if (editedImage is String) {
-          editedPath = editedImage;
-        }
-        
-        if (editedPath != null) {
-          // Fazer upload da imagem editada
-          await _uploadFotoPerfil(context, editedPath);
-        }
-      } else {
-        // Usuário cancelou a edição
+      if (cropped == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Edição cancelada'),
-              backgroundColor: Colors.orange,
-            ),
+            const SnackBar(content: Text('Edição cancelada')),
           );
         }
+        return;
       }
+
+      if (!context.mounted) return;
+      await _uploadFotoPerfil(context, cropped.path);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao editar imagem: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Erro ao editar imagem: $e')),
         );
       }
     }
   }
 
   Future<void> _uploadFotoPerfil(BuildContext context, String imagePath) async {
+    if (_isUploading) return;
+    _isUploading = true;
     try {
-      // Mostrar loading com progresso
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -745,8 +573,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   'Enviando foto...',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                  ),
+                        color: Colors.white,
+                      ),
                 ),
               ],
             ),
@@ -756,20 +584,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await ApiService.uploadFotoPerfil(imagePath);
 
-      // Fechar loading
       if (context.mounted) {
         Navigator.pop(context);
       }
 
       if (response['sucesso'] == true) {
-        // Atualizar perfil do usuário
         final authProvider = context.read<AuthProvider>();
         await authProvider.loadProfile();
 
-        // Forçar atualização do widget
         if (context.mounted) {
           setState(() {});
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Row(
@@ -788,11 +613,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception(response['mensagem'] ?? response['erro'] ?? 'Erro ao fazer upload');
       }
     } catch (e) {
-      // Fechar loading se ainda estiver aberto
       if (context.mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -810,12 +633,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       }
+    } finally {
+      _isUploading = false;
     }
   }
 
   Future<void> _removerFotoPerfil(BuildContext context) async {
     try {
-      // Mostrar loading
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -826,13 +650,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await ApiService.removerFotoPerfil();
 
-      // Fechar loading
       if (context.mounted) {
         Navigator.pop(context);
       }
 
       if (response['sucesso'] == true) {
-        // Atualizar perfil do usuário
         final authProvider = context.read<AuthProvider>();
         await authProvider.loadProfile();
 
@@ -848,7 +670,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception(response['mensagem'] ?? 'Erro ao remover foto');
       }
     } catch (e) {
-      // Fechar loading se ainda estiver aberto
       if (context.mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
@@ -863,5 +684,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-
 }

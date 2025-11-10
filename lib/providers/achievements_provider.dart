@@ -26,32 +26,15 @@ class Achievement {
 
   factory Achievement.fromJson(Map<String, dynamic> json) {
     // Verificar se está desbloqueada baseado em desbloqueadaEm (campo do backend)
-    // Também verificar outros campos possíveis
     final desbloqueadaEm = json['desbloqueadaEm'];
-    final desbloqueada = json['desbloqueada'];
-    final unlocked = json['unlocked'];
-    
-    // Verificar múltiplos campos para determinar se está desbloqueada
-    bool estaDesbloqueada = false;
-    if (desbloqueadaEm != null && desbloqueadaEm.toString().isNotEmpty) {
-      estaDesbloqueada = true;
-    } else if (desbloqueada == true || unlocked == true) {
-      estaDesbloqueada = true;
-    }
-    
-    DateTime? dataDesbloqueio;
-    if (estaDesbloqueada && desbloqueadaEm != null) {
-      try {
-        dataDesbloqueio = desbloqueadaEm is DateTime 
+    final estaDesbloqueada = desbloqueadaEm != null && desbloqueadaEm.toString().isNotEmpty;
+    final dataDesbloqueio = estaDesbloqueada && desbloqueadaEm != null
+        ? (desbloqueadaEm is DateTime 
             ? desbloqueadaEm 
-            : DateTime.parse(desbloqueadaEm.toString());
-      } catch (e) {
-        print('Erro ao parsear dataDesbloqueio: $e');
-        dataDesbloqueio = null;
-      }
-    }
+            : DateTime.parse(desbloqueadaEm.toString()))
+        : null;
     
-    final achievement = Achievement(
+    return Achievement(
       id: json['_id'] ?? json['id'] ?? '',
       tipo: json['tipo'] ?? '',
       titulo: json['titulo'] ?? '',
@@ -62,13 +45,6 @@ class Achievement {
       dataDesbloqueio: dataDesbloqueio,
       icone: json['icone'] ?? 'trophy',
     );
-    
-    // Log para debug
-    if (estaDesbloqueada) {
-      print('Conquista desbloqueada: ${achievement.titulo} (ID: ${achievement.id})');
-    }
-    
-    return achievement;
   }
 
   Color get rarityColor {
@@ -129,59 +105,28 @@ class AchievementsProvider extends ChangeNotifier {
 
     try {
       // Tentar buscar conquistas da API
-      print('Carregando conquistas do backend...');
       final achievementsData = await ApiService.getAchievements();
-      print('Conquistas recebidas: ${achievementsData.length}');
-      
-      if (achievementsData is List) {
-        // Salvar estado anterior de conquistas desbloqueadas
-        final previousUnlockedIds = _achievements
-            .where((a) => a.desbloqueada)
-            .map((a) => a.id)
-            .toSet();
+      if (achievementsData.isNotEmpty && achievementsData is List) {
+        // Salvar número anterior de conquistas desbloqueadas
+        final previousUnlockedCount = unlockedCount;
         
-        // Se a lista estiver vazia, usar conquistas mockadas para exibir todas as conquistas disponíveis
-        if (achievementsData.isEmpty) {
-          print('Lista de conquistas vazia do backend, usando conquistas mockadas');
-          _achievements = _getMockAchievements();
-        } else {
-          // Usar os dados do backend
-          _achievements = achievementsData
-              .map((achievementJson) {
-                // Log detalhado de cada conquista
-                print('Processando conquista: ${achievementJson['titulo']} - desbloqueadaEm: ${achievementJson['desbloqueadaEm']} - desbloqueada: ${achievementJson['desbloqueada']}');
-                return Achievement.fromJson(achievementJson);
-              })
-              .toList();
-        }
-        
-        print('Conquistas carregadas: ${_achievements.length}');
-        final desbloqueadas = _achievements.where((a) => a.desbloqueada).toList();
-        print('Conquistas desbloqueadas: ${desbloqueadas.length}');
-        for (var a in desbloqueadas) {
-          print('  - ${a.titulo} (ID: ${a.id})');
-        }
+        _achievements = achievementsData
+            .map((achievementJson) => Achievement.fromJson(achievementJson))
+            .toList();
         
         // Verificar se há novas conquistas desbloqueadas
-        final currentUnlockedIds = _achievements
-            .where((a) => a.desbloqueada)
-            .map((a) => a.id)
-            .toSet();
-        
-        final novasDesbloqueadas = currentUnlockedIds.difference(previousUnlockedIds);
-        if (novasDesbloqueadas.isNotEmpty) {
-          print('${novasDesbloqueadas.length} nova(s) conquista(s) desbloqueada(s)! IDs: $novasDesbloqueadas');
+        final currentUnlockedCount = unlockedCount;
+        if (currentUnlockedCount > previousUnlockedCount) {
+          print('${currentUnlockedCount - previousUnlockedCount} nova(s) conquista(s) desbloqueada(s)!');
         }
       } else {
-        // Se não for uma lista, usar conquistas mockadas
-        print('Resposta da API não é uma lista válida, usando conquistas mockadas');
+        // Se não houver conquistas na API, usar dados mockados
         _achievements = _getMockAchievements();
       }
     } catch (e) {
-      // Se houver erro, usar conquistas mockadas para garantir que sempre haja conquistas para exibir
-      print('Erro ao carregar conquistas da API: $e');
+      // Se houver erro, usar dados mockados como fallback
       _achievements = _getMockAchievements();
-      print('Usando dados mockados devido ao erro');
+      print('Erro ao carregar conquistas da API, usando dados mockados: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -190,56 +135,31 @@ class AchievementsProvider extends ChangeNotifier {
 
   Future<void> verifyAchievements() async {
     try {
-      // Salvar estado anterior de conquistas desbloqueadas
-      final previousUnlockedIds = _achievements
-          .where((a) => a.desbloqueada)
-          .map((a) => a.id)
-          .toSet();
-      
-      print('Verificando conquistas...');
       final response = await ApiService.verifyAchievements();
-      print('Resposta da verificação: $response');
-      
-      // Aguardar um pouco para garantir que o backend processou as conquistas
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      // Sempre recarregar conquistas após verificação, independente da resposta
-      // O backend pode ter processado as conquistas mesmo se a resposta não indicar sucesso explicitamente
-      await loadAchievements();
-      
-      // Aguardar mais um pouco para garantir que os dados foram atualizados
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Recarregar novamente para garantir que as conquistas estão atualizadas
-      await loadAchievements();
-      
-      // Verificar se há novas conquistas desbloqueadas
-      final currentUnlockedIds = _achievements
-          .where((a) => a.desbloqueada)
-          .map((a) => a.id)
-          .toSet();
-      
-      final novasDesbloqueadas = currentUnlockedIds.difference(previousUnlockedIds);
-      
-      if (novasDesbloqueadas.isNotEmpty) {
-        print('${novasDesbloqueadas.length} nova(s) conquista(s) desbloqueada(s)! IDs: $novasDesbloqueadas');
-        // Notificar listeners sobre novas conquistas
-        notifyListeners();
-      } else {
-        print('Nenhuma nova conquista desbloqueada.');
+      if (response['sucesso'] == true || response['success'] == true) {
+        // Aguardar um pouco para garantir que o backend processou as conquistas
+        await Future.delayed(const Duration(milliseconds: 300));
+        // Recarregar conquistas após verificação para mostrar as desbloqueadas
+        await loadAchievements();
+        
+        // Verificar se há conquistas recém-desbloqueadas para notificar o usuário
+        final novasDesbloqueadas = _achievements.where((a) => 
+          a.desbloqueada && 
+          a.dataDesbloqueio != null && 
+          a.dataDesbloqueio!.isAfter(DateTime.now().subtract(const Duration(seconds: 5)))
+        ).toList();
+        
+        if (novasDesbloqueadas.isNotEmpty) {
+          print('${novasDesbloqueadas.length} nova(s) conquista(s) desbloqueada(s)!');
+        }
       }
-      
-      // Notificar listeners mesmo se não houver novas conquistas para atualizar a UI
-      notifyListeners();
     } catch (e) {
       _error = e.toString();
       // Não interromper o fluxo se a verificação falhar
       print('Erro ao verificar conquistas: $e');
       // Mesmo com erro, tentar recarregar conquistas para mostrar estado atual
       try {
-        await Future.delayed(const Duration(milliseconds: 500));
         await loadAchievements();
-        notifyListeners();
       } catch (loadError) {
         print('Erro ao recarregar conquistas após verificação: $loadError');
       }
@@ -601,4 +521,3 @@ class AchievementsProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

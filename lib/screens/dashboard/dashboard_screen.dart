@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../providers/habits_provider.dart';
@@ -58,27 +59,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: _buildDashboard(),
         ),
       ),
-      bottomNavigationBar: CustomBottomNav(
-        selectedIndex: 0, // Sempre dashboard
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              // Dashboard - já estamos aqui
-              break;
-            case 1:
-              context.go('/habits');
-              break;
-            case 2:
-              context.go('/achievements');
-              break;
-            case 3:
-              context.go('/stats');
-              break;
-            case 4:
-              context.go('/multiplayer');
-              break;
-          }
-        },
+      bottomNavigationBar: _buildScrollableFooter(context),
+    );
+  }
+
+  /// Tornar o footer (CustomBottomNav) scrollável horizontalmente.
+  Widget _buildScrollableFooter(BuildContext context) {
+    // O CustomBottomNav é o widget de footer, por padrão não é scrollable.
+    // Aqui o envolvemos em um SingleChildScrollView horizontal e um IntrinsicHeight para manter visual idêntico.
+    return Material(
+      // Garante elevation/padding igual ao BottomNavigationBar
+      color: Theme.of(context).bottomNavigationBarTheme.backgroundColor ??
+          Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: 0.0,
+            // Remove limite de largura fixa
+          ),
+          child: IntrinsicHeight(
+            child: CustomBottomNav(
+              selectedIndex: 0, // Sempre dashboard
+              onTap: (index) {
+                switch (index) {
+                  case 0:
+                    // Dashboard - já estamos aqui
+                    break;
+                  case 1:
+                    context.go('/habits');
+                    break;
+                  case 2:
+                    context.go('/achievements');
+                    break;
+                  case 3:
+                    context.go('/stats');
+                    break;
+                  case 4:
+                    context.go('/multiplayer');
+                    break;
+                }
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -105,6 +129,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Exemplo "dummy" para transformar uma imagem em um headKey.
+  ///
+  /// Na prática, deve abrir um seletor para o usuário escolher a chave de avatar,
+  /// ou implementar um mapeamento dos arquivos/paths para chaves válidas.
+  /// Aqui só retorna null; personalize a lógica conforme suas opções reais de avatar.
+  String? convertImageFileToHeadKey(String imagePath) {
+    // Simule conversão ou devolva sempre uma chave, ou crie um seletor real
+    // Por exemplo: se imagem for X, retorna "wizard_head", etc.
+    // Aqui você decide ou implementa a UI para seleção de avatar, não upload real.
+    // Para testes, pode retornar uma headKey fixa (exemplo "wizard_head"),
+    // ou, melhor ainda, abrir um modal para o usuário escolher.
+    // Retorne null para não fazer nada.
+    // Exemplo simples:
+    // return 'wizard_head';
+    return null;
+  }
+
   Widget _buildHeader() {
     return Consumer<AvatarProvider>(
       builder: (context, avatarProvider, child) {
@@ -124,10 +165,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Row(
             children: [
-              // Avatar
-              AvatarWidget(
-                avatar: avatarProvider.avatar,
-                size: 80,
+              // Avatar com click - abrir seletor ao tocar
+              GestureDetector(
+                onTap: () async {
+                  // Abre modal para o usuário escolher um tipo de avatar.
+                  // Se quiser ImagePicker de fotos reais (não suportado nativamente), use daqui,
+                  // senão, abra um seletor para a "headKey".
+                  await _showAvatarHeadSelectionDialog(context, avatarProvider);
+                },
+                child: AvatarWidget(
+                  avatar: avatarProvider.avatar,
+                  size: 80,
+                ),
               ),
               const SizedBox(width: 16),
               // Informações do usuário
@@ -293,6 +342,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Modal simples para o usuário escolher o avatar (os "heads")
+  /// Aqui simulamos com algumas chaves ("wizard_head", "knight_head", etc)
+  Future<void> _showAvatarHeadSelectionDialog(
+      BuildContext context, AvatarProvider avatarProvider) async {
+    // Lista de opções de avatar disponíveis (deve ser igual as chaves/animações do backend)
+    final List<Map<String, String>> avatarOptions = [
+      {'key': 'wizard_head', 'label': 'Mago'},
+      {'key': 'knight_head', 'label': 'Cavaleiro'},
+      {'key': 'elf_head', 'label': 'Elfo'},
+      {'key': 'default', 'label': 'Padrão'},
+      // Adicione mais opções conforme regras do seu backend
+    ];
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Escolha seu avatar'),
+        children: avatarOptions
+            .map(
+              (map) => SimpleDialogOption(
+                onPressed: () {
+                  Navigator.pop(context, map['key']);
+                },
+                child: Text(map['label']!),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    if (selected != null) {
+      try {
+        await context.read<AvatarProvider>().setHead(selected);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Avatar atualizado com sucesso!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao atualizar avatar: $e')),
+          );
+        }
+      }
+    }
+  }
+
   Widget _buildStatsSection() {
     return Consumer<StatsProvider>(
       builder: (context, statsProvider, child) {
@@ -446,15 +543,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         : () async {
                             try {
                               await habitsProvider.completeHabit(habit.id);
-                              // Aguardar um pouco para o backend processar
-                              await Future.delayed(const Duration(milliseconds: 500));
                               // Recarrega estatísticas, avatar e conquistas após completar hábito
-                              // Executar em paralelo para reduzir tempo total, mas com delay entre elas
-                              await Future.wait([
-                                context.read<StatsProvider>().loadStats(),
-                                context.read<AvatarProvider>().loadAvatar(),
-                              ]);
-                              // Verificar conquistas por último, pois pode demorar mais
+                              await context.read<StatsProvider>().loadStats();
+                              await context.read<AvatarProvider>().loadAvatar();
                               await context
                                   .read<AchievementsProvider>()
                                   .verifyAchievements();

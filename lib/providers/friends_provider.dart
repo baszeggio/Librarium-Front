@@ -66,47 +66,17 @@ class FriendRequest {
   });
 
   factory FriendRequest.fromJson(Map<String, dynamic> json) {
-    // Garantir que usuario seja um Map
-    dynamic usuarioData = json['usuario1'] ?? json['usuario2'] ?? json['usuario'] ?? {};
-    Map<String, dynamic> usuario;
-    if (usuarioData is Map) {
-      usuario = Map<String, dynamic>.from(usuarioData);
-    } else {
-      usuario = {};
-    }
-    
-    // Converter nivel para int se necessário
-    int nivelValue = 1;
-    if (usuario['nivel'] != null) {
-      if (usuario['nivel'] is int) {
-        nivelValue = usuario['nivel'] as int;
-      } else if (usuario['nivel'] is String) {
-        nivelValue = int.tryParse(usuario['nivel'] as String) ?? 1;
-      } else if (usuario['nivel'] is num) {
-        nivelValue = (usuario['nivel'] as num).toInt();
-      }
-    }
-    
-    // Tratar solicitadoPor
-    String solicitadoPorId = '';
-    if (json['solicitadoPor'] != null) {
-      if (json['solicitadoPor'] is Map) {
-        solicitadoPorId = json['solicitadoPor']?['_id'] ?? json['solicitadoPor']?['id'] ?? '';
-      } else if (json['solicitadoPor'] is String) {
-        solicitadoPorId = json['solicitadoPor'] as String;
-      }
-    }
-    
+    final usuario = json['usuario1'] ?? json['usuario2'] ?? {};
     return FriendRequest(
-      id: json['_id'] ?? json['id'] ?? '',
+      id: json['_id'] ?? '',
       nomeUsuario: usuario['nomeUsuario'] ?? '',
-      nivel: nivelValue,
-      avatar: usuario['avatar'] is Map ? Map<String, dynamic>.from(usuario['avatar'] as Map) : null,
+      nivel: usuario['nivel'] ?? 1,
+      avatar: usuario['avatar'] as Map<String, dynamic>?,
       fotoPerfil: usuario['fotoPerfil'] as String?,
       dataSolicitacao: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'].toString())
           : DateTime.now(),
-      solicitadoPor: solicitadoPorId,
+      solicitadoPor: json['solicitadoPor']?['_id'] ?? json['solicitadoPor'] ?? '',
     );
   }
 }

@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/multiplayer_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../providers/friends_provider.dart';
-import '../../services/api_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/avatar_widget.dart';
@@ -439,14 +438,13 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   }
 
   void _showCreateBattleDialog(BuildContext context, {String? friendId, String? friendName}) {
-    // Se friendName estiver disponível, usar nome; caso contrário, usar ID
-    final opponentIdController = TextEditingController(text: friendName ?? friendId ?? '');
+    final opponentIdController = TextEditingController(text: friendId ?? '');
+    String? selectedType = 'sequencia';
     final durationController = TextEditingController(text: '60');
 
     showDialog(
       context: context,
       builder: (dialogContext) {
-        String? selectedType = 'sequencia';
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
@@ -476,8 +474,8 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   children: [
                     CustomTextField(
                       controller: opponentIdController,
-                      label: 'Nome ou Email do Adversário',
-                      hint: 'Digite o nome ou email ou escolha um amigo',
+                      label: 'ID do Adversário',
+                      hint: 'Digite o ID ou escolha um amigo',
                       enabled: friendId == null,
                     ),
                     if (friendId == null) ...[
@@ -525,41 +523,13 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   onPressed: () async {
                     if (opponentIdController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Digite o nome ou email do adversário ou escolha um amigo')),
+                        const SnackBar(content: Text('Digite o ID do adversário ou escolha um amigo')),
                       );
                       return;
                     }
                     try {
-                      // Buscar usuário por nome ou email
-                      String adversarioId = opponentIdController.text.trim();
-                      
-                      // Se não for um ID (não começa com letras/números típicos de ObjectId), buscar por nome/email
-                      if (!RegExp(r'^[a-f\d]{24}$', caseSensitive: false).hasMatch(adversarioId)) {
-                        final searchResults = await ApiService.searchUsers(adversarioId);
-                        if (searchResults.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Usuário não encontrado. Verifique o nome ou email.'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-                        // Pegar o primeiro resultado
-                        adversarioId = searchResults[0]['_id'] ?? searchResults[0]['id'] ?? '';
-                        if (adversarioId.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Erro ao obter ID do usuário.'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-                      }
-                      
                       await context.read<MultiplayerProvider>().createBattle(
-                        adversarioId: adversarioId,
+                        adversarioId: opponentIdController.text.trim(),
                         tipoBatalha: selectedType,
                         duracao: int.tryParse(durationController.text) ?? 60,
                       );
@@ -599,7 +569,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
     
     showDialog(
       context: context,
-      useRootNavigator: true,
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -641,8 +610,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                         ),
                         onTap: () {
                           setState(() {
-                            // Usar nome de usuário ao invés de ID
-                            controller.text = friend.nomeUsuario;
+                            controller.text = friend.id;
                           });
                           Navigator.pop(dialogContext);
                         },
@@ -668,12 +636,12 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
   void _showCreateChallengeDialog() {
     final opponentIdController = TextEditingController();
     final messageController = TextEditingController();
+    String? selectedType = 'sequencia';
     DateTime? selectedEndDate;
 
     showDialog(
       context: context,
       builder: (dialogContext) {
-        String? selectedType = 'sequencia';
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
@@ -688,8 +656,8 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   children: [
                     CustomTextField(
                       controller: opponentIdController,
-                      label: 'Nome ou Email do Adversário',
-                      hint: 'Digite o nome ou email do adversário',
+                      label: 'ID do Adversário',
+                      hint: 'Digite o ID do adversário',
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
@@ -726,41 +694,13 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> {
                   onPressed: () async {
                     if (opponentIdController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Digite o nome ou email do adversário')),
+                        const SnackBar(content: Text('Digite o ID do adversário')),
                       );
                       return;
                     }
                     try {
-                      // Buscar usuário por nome ou email
-                      String adversarioId = opponentIdController.text.trim();
-                      
-                      // Se não for um ID (não começa com letras/números típicos de ObjectId), buscar por nome/email
-                      if (!RegExp(r'^[a-f\d]{24}$', caseSensitive: false).hasMatch(adversarioId)) {
-                        final searchResults = await ApiService.searchUsers(adversarioId);
-                        if (searchResults.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Usuário não encontrado. Verifique o nome ou email.'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-                        // Pegar o primeiro resultado
-                        adversarioId = searchResults[0]['_id'] ?? searchResults[0]['id'] ?? '';
-                        if (adversarioId.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Erro ao obter ID do usuário.'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-                      }
-                      
                       await context.read<MultiplayerProvider>().createChallenge(
-                        adversarioId: adversarioId,
+                        adversarioId: opponentIdController.text.trim(),
                         tipoDesafio: selectedType,
                         mensagem: messageController.text.trim().isNotEmpty 
                             ? messageController.text.trim() 
