@@ -22,174 +22,181 @@ class AvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Obter foto de perfil do AuthProvider se não fornecida
-    final fotoPerfil = fotoPerfilUrl ?? 
-        (Provider.of<AuthProvider>(context, listen: false).user?['fotoPerfil'] as String?);
-    
-    // Se tiver foto de perfil, mostrar ela (prioridade sobre avatar)
-    if (fotoPerfil != null && fotoPerfil.isNotEmpty) {
-      // Construir URL completa - pode vir já completa ou apenas o path
-      String fotoUrl = fotoPerfil;
-      if (!fotoPerfil.startsWith('http://') && !fotoPerfil.startsWith('https://')) {
-        // Se não começar com http, adicionar o baseUrl (removendo /api)
-        final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
-        fotoUrl = '$baseUrl$fotoPerfil';
-      }
-      
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-            width: 3,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              blurRadius: 15,
-              spreadRadius: 3,
-            ),
-          ],
-        ),
-        child: ClipOval(
-          child: Image.network(
-            // Adicionar query parameter para cache busting (atualiza a cada minuto)
-            '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch ~/ 60000}',
+    // Usar Consumer para escutar mudanças do AuthProvider
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        // Obter foto de perfil do AuthProvider se não fornecida
+        final fotoPerfil = fotoPerfilUrl ?? 
+            (authProvider.user?['fotoPerfil'] as String?);
+        
+        // Se tiver foto de perfil, mostrar ela (prioridade sobre avatar)
+        if (fotoPerfil != null && fotoPerfil.isNotEmpty) {
+          // Construir URL completa - pode vir já completa ou apenas o path
+          String fotoUrl = fotoPerfil;
+          if (!fotoPerfil.startsWith('http://') && !fotoPerfil.startsWith('https://')) {
+            // Se não começar com http, adicionar o baseUrl (removendo /api)
+            final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+            fotoUrl = '$baseUrl$fotoPerfil';
+          }
+          
+          return Container(
             width: size,
             height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              // Se erro ao carregar, mostrar avatar padrão
-              return _buildDefaultAvatar(context);
-            },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 15,
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.network(
+                // Adicionar query parameter para cache busting (usa timestamp completo para garantir atualização imediata)
+                '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
                 width: size,
                 height: size,
-                color: Colors.grey[800],
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    strokeWidth: 2,
+                fit: BoxFit.cover,
+                cacheWidth: size.toInt(),
+                cacheHeight: size.toInt(),
+                errorBuilder: (context, error, stackTrace) {
+                  // Se erro ao carregar, mostrar avatar padrão
+                  return _buildDefaultAvatar(context);
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: size,
+                    height: size,
+                    color: Colors.grey[800],
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+        
+        // Se não tiver foto de perfil, mostrar avatar padrão
+        if (avatar == null) {
+          return _buildPlaceholder(context);
+        }
+
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.secondary,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 3,
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Avatar principal (imagem de cabeça se disponível, senão ícone)
+              Center(
+                child: Container(
+                  width: size - 8,
+                  height: size - 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: ClipOval(
+                      child: Builder(
+                        builder: (context) {
+                          final headAsset = avatar!.headAsset;
+                          if (headAsset != null) {
+                            return SizedBox(
+                              width: (size - 8) * 0.7,
+                              height: (size - 8) * 0.7,
+                              child: Image.asset(
+                                headAsset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    _getAvatarIcon(avatar!.nivel),
+                                    size: size * 0.5,
+                                    color: Colors.white,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                          return Icon(
+                            _getAvatarIcon(avatar!.nivel),
+                            size: size * 0.5,
+                            color: Colors.white,
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      );
-    }
-
-    // Se não tiver foto de perfil, mostrar avatar padrão
-    if (avatar == null) {
-      return _buildPlaceholder(context);
-    }
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.secondary,
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            blurRadius: 15,
-            spreadRadius: 3,
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Avatar principal (imagem de cabeça se disponível, senão ícone)
-          Center(
-            child: Container(
-              width: size - 8,
-              height: size - 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.1),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
               ),
-              child: Center(
-                child: ClipOval(
-                  child: Builder(
-                    builder: (context) {
-                      final headAsset = avatar!.headAsset;
-                      if (headAsset != null) {
-                        return SizedBox(
-                          width: (size - 8) * 0.7,
-                          height: (size - 8) * 0.7,
-                          child: Image.asset(
-                            headAsset,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                _getAvatarIcon(avatar!.nivel),
-                                size: size * 0.5,
-                                color: Colors.white,
-                              );
-                            },
-                          ),
-                        );
-                      }
-                      return Icon(
-                        _getAvatarIcon(avatar!.nivel),
-                        size: size * 0.5,
+              
+              // Nível do avatar
+              if (showLevel)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
                         color: Colors.white,
-                      );
-                    },
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      '${avatar!.nivel}',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size * 0.15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              
+              // Efeitos especiais
+              if (avatar!.efeitos.isNotEmpty)
+                ...avatar!.efeitos.map((efeito) => _buildEffect(efeito)),
+            ],
           ),
-          
-          // Nível do avatar
-          if (showLevel)
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
-                ),
-                child: Text(
-                  '${avatar!.nivel}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: size * 0.15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          
-          // Efeitos especiais
-          if (avatar!.efeitos.isNotEmpty)
-            ...avatar!.efeitos.map((efeito) => _buildEffect(efeito)),
-        ],
-      ),
+        );
+      },
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+import 'dart:async';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
 import '../../widgets/avatar_widget.dart';
@@ -84,8 +85,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildUserInfo(),
           const SizedBox(height: 24),
           _buildAvatarStats(),
-          const SizedBox(height: 24),
-          _buildSettingsSection(),
           const SizedBox(height: 24),
           _buildLogoutButton(),
         ],
@@ -312,46 +311,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSettingsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.grey.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Configurações',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.lock, color: Colors.white70),
-            title: const Text(
-              'Segurança da Conta',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: const Text(
-              'Gerencie senha e autenticação',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            onTap: () {
-              // exemplo: context.go('/seguranca');
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLogoutButton() {
     return CustomButton(
       text: 'Sair da Conta',
@@ -427,6 +386,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await _pickImage(context, ImageSource.camera);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.upload_file, color: Colors.orange),
+              title: const Text('Upload Direto (sem edição)', style: TextStyle(color: Colors.orange)),
+              subtitle: const Text('Use se o editor não abrir', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickImageDirect(context, ImageSource.gallery);
+              },
+            ),
             Consumer<AuthProvider>(
               builder: (context, authProvider, child) {
                 final temFoto = authProvider.user?['fotoPerfil'] != null;
@@ -463,20 +431,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
       } else if (Platform.isIOS) {
         permission = Permission.photos; // iOS uses "photos"
       } else {
-        permission = Permission.storage; // Android 13+: use storage
+        // Android 13+ usa photos, versões antigas usam storage
+        if (Platform.isAndroid) {
+          permission = Permission.photos;
+        } else {
+          permission = Permission.storage;
+        }
       }
+      
       var status = await permission.request();
       if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                source == ImageSource.camera
-                    ? 'Permissão de câmera negada'
-                    : 'Permissão de galeria negada'),
-            backgroundColor: Colors.red,
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  source == ImageSource.camera
+                      ? 'Permissão de câmera negada'
+                      : 'Permissão de galeria negada'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Mostrar loading
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
           ),
         );
-        return;
       }
 
       final ImagePicker picker = ImagePicker();
@@ -487,64 +474,290 @@ class _ProfileScreenState extends State<ProfileScreen> {
         maxHeight: 2000,
       );
 
+      // Fechar loading
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
       if (image == null) {
         return;
       }
-      // Garante que contexto está montado antes de continuar
-      if (!mounted) return;
-
-      // Abrir cropper
-      await _showCropDialog(context, image.path);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao selecionar imagem: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _showCropDialog(BuildContext context, String imagePath) async {
-    try {
-      final cropped = await ImageCropper().cropImage(
-        sourcePath: imagePath,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Editar Foto',
-            toolbarColor: Theme.of(context).colorScheme.primary,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-            hideBottomControls: false,
-          ),
-          IOSUiSettings(
-            title: 'Editar Foto',
-            aspectRatioLockEnabled: true,
-          ),
-        ],
-        compressQuality: 90,
-        compressFormat: ImageCompressFormat.jpg,
-      );
-
-      if (cropped == null) {
+      
+      // Verificar se o arquivo existe
+      final file = File(image.path);
+      if (!await file.exists()) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Edição cancelada')),
+            const SnackBar(
+              content: Text('Erro: Arquivo de imagem não encontrado'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
         return;
       }
 
-      if (!context.mounted) return;
-      await _uploadFotoPerfil(context, cropped.path);
+      // Garante que contexto está montado antes de continuar
+      if (!mounted) return;
+
+      // Abrir cropper - usar this.context para garantir que está usando o contexto do State
+      await _showCropDialog(this.context, image.path);
     } catch (e) {
+      // Fechar loading se ainda estiver aberto
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao editar imagem: $e')),
+          SnackBar(
+            content: Text('Erro ao selecionar imagem: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      print('Erro ao selecionar imagem: $e'); // Debug
+    }
+  }
+
+  // Método alternativo: upload direto sem cropper (para debug/teste)
+  Future<void> _pickImageDirect(BuildContext context, ImageSource source) async {
+    try {
+      late Permission permission;
+      if (source == ImageSource.camera) {
+        permission = Permission.camera;
+      } else if (Platform.isIOS) {
+        permission = Permission.photos;
+      } else {
+        if (Platform.isAndroid) {
+          permission = Permission.photos;
+        } else {
+          permission = Permission.storage;
+        }
+      }
+      
+      var status = await permission.request();
+      if (!status.isGranted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  source == ImageSource.camera
+                      ? 'Permissão de câmera negada'
+                      : 'Permissão de galeria negada'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        imageQuality: 90,
+        maxWidth: 2000,
+        maxHeight: 2000,
+      );
+
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      if (image == null) {
+        return;
+      }
+      
+      final file = File(image.path);
+      if (!await file.exists()) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro: Arquivo de imagem não encontrado'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      
+      // Upload direto sem cropper
+      await _uploadFotoPerfil(context, image.path);
+    } catch (e) {
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      print('Erro no upload direto: $e');
+    }
+  }
+
+  Future<void> _showCropDialog(BuildContext context, String imagePath) async {
+    try {
+      print('=== INICIANDO CROP DIALOG ===');
+      print('Caminho original: $imagePath');
+      
+      // Verificar se o arquivo existe
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        print('ERRO: Arquivo não existe!');
+        if (mounted && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro: Arquivo de imagem não encontrado'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      print('Arquivo existe, tamanho: ${await file.length()} bytes');
+
+      // Capturar valores do tema usando o contexto do widget (mounted) em vez do parâmetro
+      // Isso garante que estamos usando o contexto correto
+      Color primaryColor = Colors.blue; // Fallback
+      
+      if (mounted) {
+        try {
+          final theme = Theme.of(this.context);
+          primaryColor = theme.colorScheme.primary;
+          print('Cor primária capturada: $primaryColor');
+        } catch (e) {
+          print('Aviso: Não foi possível capturar tema, usando fallback: $e');
+        }
+      } else {
+        print('Widget não está montado, usando cor padrão');
+      }
+
+      // Usar o caminho original diretamente - ImageCropper deve lidar com isso
+      String finalImagePath = imagePath;
+      print('Usando caminho: $finalImagePath');
+
+      print('Chamando ImageCropper...');
+      print('sourcePath será: $finalImagePath');
+      
+      // Verificar se o ImageCropper está disponível
+      try {
+        // Configuração do ImageCropper
+        final cropped = await ImageCropper().cropImage(
+          sourcePath: finalImagePath,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Editar Foto',
+              toolbarColor: primaryColor,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true,
+              hideBottomControls: false,
+            ),
+            IOSUiSettings(
+              title: 'Editar Foto',
+              aspectRatioLockEnabled: true,
+              resetAspectRatioEnabled: false,
+            ),
+          ],
+          compressQuality: 90,
+          compressFormat: ImageCompressFormat.jpg,
+        );
+        
+        print('ImageCropper retornou: ${cropped != null ? cropped.path : "null"}');
+
+        if (cropped == null) {
+          print('Usuário cancelou a edição');
+          if (mounted) {
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              const SnackBar(
+                content: Text('Edição cancelada'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+
+        // Verificar se o arquivo cropped existe
+        final croppedFile = File(cropped.path);
+        if (!await croppedFile.exists()) {
+          print('ERRO: Arquivo editado não existe em: ${cropped.path}');
+          if (mounted) {
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              const SnackBar(
+                content: Text('Erro: Arquivo editado não encontrado'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+
+        print('Imagem editada salva com sucesso em: ${cropped.path}');
+        print('Tamanho do arquivo editado: ${await croppedFile.length()} bytes');
+
+        if (!mounted) {
+          print('ERRO: Widget não está montado antes do upload');
+          return;
+        }
+        
+        await _uploadFotoPerfil(this.context, cropped.path);
+      } catch (cropError) {
+        // Erro específico do ImageCropper
+        print('ERRO no ImageCropper: $cropError');
+        rethrow; // Re-lançar para ser capturado pelo catch externo
+      }
+    } catch (e, stackTrace) {
+      print('=== ERRO NO CROP DIALOG ===');
+      print('Tipo do erro: ${e.runtimeType}');
+      print('Mensagem: $e');
+      print('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        String errorMessage = 'Erro ao abrir editor de imagem';
+        
+        if (e.toString().contains('TimeoutException') || e.toString().contains('timeout')) {
+          errorMessage = 'O editor demorou muito para abrir. Tente novamente ou reinicie o app.';
+        } else if (e.toString().contains('permission') || e.toString().contains('Permission')) {
+          errorMessage = 'Permissão negada. Verifique as permissões do app.';
+        } else if (e.toString().contains('FileNotFoundException') || e.toString().contains('not found')) {
+          errorMessage = 'Arquivo não encontrado. Tente selecionar a imagem novamente.';
+        } else {
+          errorMessage = 'Erro: ${e.toString()}';
+        }
+        
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
         );
       }
     }
@@ -590,9 +803,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (response['sucesso'] == true) {
         final authProvider = context.read<AuthProvider>();
+        final avatarProvider = context.read<AvatarProvider>();
+        
+        // Atualizar perfil do usuário para pegar a nova foto
         await authProvider.loadProfile();
+        
+        // Recarregar avatar para manter sincronização (embora não seja necessário para a foto)
+        await avatarProvider.loadAvatar();
 
         if (context.mounted) {
+          // Forçar rebuild do widget para atualizar a interface
           setState(() {});
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -656,9 +876,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (response['sucesso'] == true) {
         final authProvider = context.read<AuthProvider>();
+        final avatarProvider = context.read<AvatarProvider>();
+        
+        // Atualizar perfil do usuário para remover a foto
         await authProvider.loadProfile();
+        
+        // Recarregar avatar para manter sincronização
+        await avatarProvider.loadAvatar();
 
         if (context.mounted) {
+          // Forçar rebuild do widget para atualizar a interface
+          setState(() {});
+          
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Foto de perfil removida com sucesso!'),

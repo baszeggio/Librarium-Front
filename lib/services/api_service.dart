@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -146,12 +147,30 @@ class ApiService {
 
   static Future<Map<String, dynamic>> uploadFotoPerfil(String filePath) async {
     try {
+      // Verificar se o arquivo existe
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception('Arquivo de imagem não encontrado: $filePath');
+      }
+
+      // Verificar tamanho do arquivo (máximo 5MB)
+      final fileSize = await file.length();
+      if (fileSize > 5 * 1024 * 1024) {
+        throw Exception('Arquivo muito grande. Máximo permitido: 5MB');
+      }
+
+      if (fileSize == 0) {
+        throw Exception('Arquivo de imagem está vazio');
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
       
       if (token == null) {
-        throw Exception('Token não encontrado');
+        throw Exception('Token não encontrado. Faça login novamente.');
       }
+
+      print('Iniciando upload de foto: $filePath (${fileSize} bytes)');
 
       // Usar multipart para upload de arquivo
       final request = http.MultipartRequest(
@@ -162,29 +181,94 @@ class ApiService {
       // Adicionar token de autenticação
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Adicionar arquivo
-      final file = await http.MultipartFile.fromPath('foto', filePath);
-      request.files.add(file);
+      // Adicionar arquivo com validação e Content-Type explícito
+      try {
+        // Determinar o tipo MIME baseado na extensão do arquivo
+        String contentType = 'image/jpeg'; // Padrão
+        final extension = filePath.toLowerCase().split('.').last;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            contentType = 'image/jpeg';
+            break;
+          case 'png':
+            contentType = 'image/png';
+            break;
+          case 'gif':
+            contentType = 'image/gif';
+            break;
+          case 'webp':
+            contentType = 'image/webp';
+            break;
+          default:
+            contentType = 'image/jpeg'; // Fallback
+        }
+
+        print('Tipo MIME detectado: $contentType para extensão: $extension');
+
+        // Criar MultipartFile usando fromPath (que detecta automaticamente o tipo)
+        // O importante é garantir que o nome do arquivo tenha a extensão correta
+        // O Multer no backend verifica tanto o mimetype quanto a extensão do nome do arquivo
+        final multipartFile = await http.MultipartFile.fromPath(
+          'foto',
+          filePath,
+          filename: 'foto.$extension', // Garantir que o nome do arquivo tenha extensão correta
+        );
+        
+        request.files.add(multipartFile);
+        print('Arquivo adicionado ao request: ${multipartFile.filename} (Extensão: .$extension, Tamanho: ${await file.length()} bytes)');
+      } catch (fileError) {
+        print('Erro ao criar MultipartFile: $fileError');
+        throw Exception('Erro ao processar arquivo de imagem: ${fileError.toString()}');
+      }
 
       // Enviar requisição
+      print('Enviando requisição para o servidor...');
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      print('Resposta recebida: Status ${response.statusCode}');
+
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
-        final errorMsg = decodedResponse['mensagem'] ?? 
-                        decodedResponse['message'] ?? 
-                        decodedResponse['erro'] ??
-                        decodedResponse['error'] ??
-                        'Erro ao fazer upload da foto';
+        String errorMsg = 'Erro ao fazer upload da foto';
+        
+        try {
+          final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+          errorMsg = decodedResponse['mensagem'] ?? 
+                    decodedResponse['message'] ?? 
+                    decodedResponse['erro'] ??
+                    decodedResponse['error'] ??
+                    errorMsg;
+        } catch (e) {
+          // Se não conseguir decodificar, usar a resposta bruta
+          errorMsg = response.body.isNotEmpty 
+              ? response.body 
+              : 'Erro HTTP ${response.statusCode}';
+        }
+        
         throw Exception(errorMsg);
       }
 
-      return jsonDecode(response.body);
+      final responseData = jsonDecode(response.body);
+      print('Upload concluído com sucesso!');
+      return responseData;
     } catch (e) {
+      print('Erro no uploadFotoPerfil: $e');
+      
       if (e is FormatException) {
-        throw Exception('Erro ao processar resposta do servidor.');
+        throw Exception('Erro ao processar resposta do servidor. Verifique sua conexão.');
       }
+      
+      if (e.toString().contains('FileNotFoundException') || 
+          e.toString().contains('No such file')) {
+        throw Exception('Arquivo de imagem não encontrado. Tente selecionar novamente.');
+      }
+      
+      if (e.toString().contains('Permission denied') || 
+          e.toString().contains('permission')) {
+        throw Exception('Permissão negada para acessar o arquivo.');
+      }
+      
       rethrow;
     }
   }
