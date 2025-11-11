@@ -31,17 +31,16 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MultiplayerProvider>().loadBattles();
-      context.read<MultiplayerProvider>().loadChallenges();
+      // Removido: context.read<MultiplayerProvider>().loadChallenges();
       context.read<MessagesProvider>().loadMessages();
       context.read<FriendsProvider>().loadAll();
       _loadConversations();
       _startConversationsPolling();
     });
-
   }
 
   Future<void> _loadConversations() async {
@@ -130,7 +129,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
                   controller: _tabController,
                   children: [
                     _buildBattlesTab(),
-                    _buildChallengesTab(),
                     _buildChatTab(),
                     _buildFriendsTab(),
                   ],
@@ -189,20 +187,11 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
           const SizedBox(width: 8),
           Expanded(
             child: _buildQuickActionButton(
-              icon: Icons.people,
-              label: 'Desafiar Amigo',
-              color: Colors.blue,
-              onTap: () => _showChallengeFriendDialog(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildQuickActionButton(
               icon: Icons.chat_bubble_outline,
               label: 'Nova Conversa',
               color: Colors.green,
               onTap: () {
-                _tabController.animateTo(2);
+                _tabController.animateTo(1);
                 _showUserSearchDialog();
               },
             ),
@@ -214,7 +203,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
               label: 'Adicionar',
               color: Colors.orange,
               onTap: () {
-                _tabController.animateTo(3);
+                _tabController.animateTo(2);
                 _showUserSearchDialog();
               },
             ),
@@ -328,23 +317,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
                       ),
                     );
                   },
-                ),
-              ],
-            ),
-          ),
-          const Tab(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.group_work, size: 16),
-                SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Desafios',
-                    style: TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ),
               ],
             ),
@@ -665,33 +637,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildChallengesTab() {
-    return RefreshIndicator(
-      onRefresh: () async {
-        await context.read<MultiplayerProvider>().loadChallenges();
-      },
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            CustomButton(
-              text: 'Criar Novo Desafio',
-              onPressed: () => _showCreateChallengeDialog(),
-              backgroundColor: Colors.blue,
-              width: double.infinity,
-            ),
-            const SizedBox(height: 16),
-            // Lista de desafios aqui
-            Text(
-              'Desafios serão exibidos aqui',
-              style: TextStyle(color: Colors.grey[400]),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1309,7 +1254,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
                     _selectedChatUser = friend.id;
                     _selectedChatUserName = friend.nomeUsuario;
                   });
-                  _tabController.animateTo(2);
+                  _tabController.animateTo(1);
                 },
                 tooltip: 'Conversar',
               ),
@@ -1454,7 +1399,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
                                         _selectedChatUserName = user['nomeUsuario'];
                                       });
                                       Navigator.pop(dialogContext);
-                                      _tabController.animateTo(2);
+                                      _tabController.animateTo(1);
                                     },
                                   ),
                                 ],
@@ -1700,11 +1645,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
     );
   }
 
-  void _showCreateChallengeDialog() {
-    // Similar ao create battle, mas para desafios
-    _showCreateBattleDialog();
-  }
-
   void _showChallengeFriendDialog() {
     final friendsProvider = context.read<FriendsProvider>();
     
@@ -1715,7 +1655,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
           backgroundColor: Colors.orange,
         ),
       );
-      _tabController.animateTo(3);
+      _tabController.animateTo(2);
       return;
     }
 
@@ -1856,4 +1796,3 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
     );
   }
 }
-
