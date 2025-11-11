@@ -135,49 +135,8 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
             ),
           ),
           const Spacer(),
-          // Badge de notificações (placeholder)
           IconButton(
-            icon: Stack(
-              children: [
-                const Icon(Icons.notifications_outlined, color: Colors.white),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Consumer<MultiplayerProvider>(
-                    builder: (context, provider, _) {
-                      // Obter ID do usuário logado
-                      final authProvider = context.read<AuthProvider>();
-                      final currentUserId = authProvider.user?['_id']?.toString() ?? authProvider.user?['id']?.toString();
-                      
-                      // Se não houver ID do usuário, não mostrar badge
-                      if (currentUserId == null) return const SizedBox.shrink();
-                      
-                      // Contar apenas batalhas pendentes que o usuário recebeu (não as que criou)
-                      final pendingBattles = provider.battles.where((b) {
-                        if (b.status == 'aguardando') {
-                          final isJogador2 = b.jogador2Id == currentUserId;
-                          final isJogador1 = b.jogador1Id == currentUserId;
-                          return isJogador2 && !isJogador1;
-                        }
-                        return false;
-                      }).length;
-                      if (pendingBattles == 0) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '$pendingBattles',
-                          style: const TextStyle(color: Colors.white, fontSize: 10),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
             onPressed: () {
               _tabController.animateTo(0); // Ir para tab de batalhas
             },
