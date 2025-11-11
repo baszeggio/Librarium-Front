@@ -106,7 +106,7 @@ class AchievementsProvider extends ChangeNotifier {
     try {
       // Tentar buscar conquistas da API
       final achievementsData = await ApiService.getAchievements();
-      if (achievementsData.isNotEmpty && achievementsData is List) {
+      if (achievementsData.isNotEmpty) {
         // Salvar número anterior de conquistas desbloqueadas
         final previousUnlockedCount = unlockedCount;
         
@@ -133,26 +133,44 @@ class AchievementsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> verifyAchievements() async {
+  Future<List<Achievement>> verifyAchievements() async {
     try {
       final response = await ApiService.verifyAchievements();
       if (response['sucesso'] == true || response['success'] == true) {
+        // Processar conquistas desbloqueadas retornadas pela API
+        final conquistasDesbloqueadasData = response['conquistasDesbloqueadas'] as List<dynamic>?;
+        List<Achievement> novasConquistas = [];
+        
+        if (conquistasDesbloqueadasData != null && conquistasDesbloqueadasData.isNotEmpty) {
+          // Converter as conquistas desbloqueadas para objetos Achievement
+          novasConquistas = conquistasDesbloqueadasData
+              .map((c) {
+                final conquistaData = c['conquista'] ?? c;
+                return Achievement.fromJson(conquistaData);
+              })
+              .toList();
+        }
+        
         // Aguardar um pouco para garantir que o backend processou as conquistas
         await Future.delayed(const Duration(milliseconds: 300));
+        
         // Recarregar conquistas após verificação para mostrar as desbloqueadas
         await loadAchievements();
         
-        // Verificar se há conquistas recém-desbloqueadas para notificar o usuário
-        final novasDesbloqueadas = _achievements.where((a) => 
-          a.desbloqueada && 
-          a.dataDesbloqueio != null && 
-          a.dataDesbloqueio!.isAfter(DateTime.now().subtract(const Duration(seconds: 5)))
-        ).toList();
-        
-        if (novasDesbloqueadas.isNotEmpty) {
-          print('${novasDesbloqueadas.length} nova(s) conquista(s) desbloqueada(s)!');
+        // Se não recebemos conquistas na resposta, verificar se há novas desbloqueadas
+        if (novasConquistas.isEmpty) {
+          final novasDesbloqueadas = _achievements.where((a) => 
+            a.desbloqueada && 
+            a.dataDesbloqueio != null && 
+            a.dataDesbloqueio!.isAfter(DateTime.now().subtract(const Duration(seconds: 5)))
+          ).toList();
+          
+          novasConquistas = novasDesbloqueadas;
         }
+        
+        return novasConquistas;
       }
+      return [];
     } catch (e) {
       _error = e.toString();
       // Não interromper o fluxo se a verificação falhar
@@ -163,7 +181,22 @@ class AchievementsProvider extends ChangeNotifier {
       } catch (loadError) {
         print('Erro ao recarregar conquistas após verificação: $loadError');
       }
+      return [];
     }
+  }
+
+  // Método para processar conquistas desbloqueadas de uma resposta
+  List<Achievement> processUnlockedAchievements(List<dynamic>? conquistasData) {
+    if (conquistasData == null || conquistasData.isEmpty) {
+      return [];
+    }
+    
+    return conquistasData
+        .map((c) {
+          final conquistaData = c['conquista'] ?? c;
+          return Achievement.fromJson(conquistaData);
+        })
+        .toList();
   }
 
   Future<void> loadAchievementsByCategory(String category) async {

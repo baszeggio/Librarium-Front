@@ -22,8 +22,8 @@ class ApiHttpException implements Exception {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.0.107:3000/api';
-  // static const String baseUrl = 'http://10.0.31.223:3000/api';
+  // static const String baseUrl = 'http://192.168.0.107:3000/api';
+  static const String baseUrl = 'http://10.0.31.223:3000/api';
 
   static Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
     final headers = <String, String>{

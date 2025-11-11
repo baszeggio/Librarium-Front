@@ -230,28 +230,86 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                           Builder(
                             builder: (context) {
                               final canComplete = canCompleteHabit(habit);
-                              final reason = getCannotCompleteReason(habit);
                               
                               return CustomButton(
                                 text: habit.completado == true 
                                     ? 'Já Concluído' 
                                     : 'Marcar como Concluído',
                                 onPressed: canComplete ? () async {
-                                  await habitsProvider.completeHabit(habit.id);
-                                  // Verificar e recarregar conquistas
                                   try {
-                                    await context.read<AchievementsProvider>().verifyAchievements();
+                                    final result = await habitsProvider.completeHabit(habit.id);
+                                    
+                                    // Processar conquistas desbloqueadas se houver
+                                    final conquistasDesbloqueadas = result['conquistasDesbloqueadas'] as List<dynamic>?;
+                                    final achievementsProvider = context.read<AchievementsProvider>();
+                                    
+                                    if (conquistasDesbloqueadas != null && conquistasDesbloqueadas.isNotEmpty) {
+                                      // Processar conquistas desbloqueadas
+                                      final novasConquistas = achievementsProvider.processUnlockedAchievements(conquistasDesbloqueadas);
+                                      
+                                      // Recarregar conquistas
+                                      await achievementsProvider.loadAchievements();
+                                      
+                                      // Mostrar notificação de conquistas desbloqueadas
+                                      if (mounted && novasConquistas.isNotEmpty) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              novasConquistas.length == 1
+                                                  ? '🏆 Conquista desbloqueada: ${novasConquistas.first.titulo}!'
+                                                  : '🏆 ${novasConquistas.length} conquistas desbloqueadas!',
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                            backgroundColor: Colors.amber[700],
+                                            duration: const Duration(seconds: 3),
+                                          ),
+                                        );
+                                      }
+                                    } else {
+                                      // Verificar conquistas mesmo se não vieram na resposta
+                                      await achievementsProvider.verifyAchievements();
+                                    }
+                                    
+                                    _loadProgress();
+                                    
+                                    if (mounted) {
+                                      final experienciaGanha = result['experienciaGanha'] ?? 0;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✅ Hábito concluído! +$experienciaGanha XP'),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
                                   } catch (e) {
-                                    print('Erro ao verificar conquistas: $e');
-                                  }
-                                  _loadProgress();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Hábito concluído! +XP ganho!'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
+                                    // Trata erro específico de já ter completado hoje pelo backend
+                                    final message = e.toString();
+                                    if (mounted) {
+                                      if (message.contains('statusCode: 404') ||
+                                          message.contains('Caminho não encontrado') ||
+                                          message.contains('já completou este hábito hoje') ||
+                                          message.contains('já foi concluído hoje') ||
+                                          message.contains('Você já completou este hábito hoje')) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Você já completou este hábito hoje!',
+                                              style: TextStyle(color: Colors.white),
+                                            ),
+                                            backgroundColor: Colors.deepPurple,
+                                          ),
+                                        );
+                                      } else {
+                                        print('Erro ao concluir hábito: $e');
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Erro: ${e.toString()}'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
                                   }
                                 } : null,
                                 width: double.infinity,

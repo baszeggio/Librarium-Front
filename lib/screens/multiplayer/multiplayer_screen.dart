@@ -26,6 +26,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
   String? _selectedChatUserName;
   List<dynamic> _conversations = [];
   bool _loadingConversations = false;
+  Timer? _conversationsPollingTimer;
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
       context.read<MessagesProvider>().loadMessages();
       context.read<FriendsProvider>().loadAll();
       _loadConversations();
+      _startConversationsPolling();
     });
 
   }
@@ -55,12 +57,43 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
     }
   }
 
+  void _startConversationsPolling() {
+    // Parar polling anterior se existir
+    _conversationsPollingTimer?.cancel();
+    
+    // Atualizar lista de conversas a cada 5 segundos quando não há conversa aberta
+    _conversationsPollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (_selectedChatUser != null) {
+        // Se há conversa aberta, não atualizar lista de conversas
+        return;
+      }
+      
+      try {
+        final conversas = await ApiService.listarConversas();
+        if (mounted) {
+          setState(() {
+            _conversations = conversas;
+          });
+        }
+      } catch (e) {
+        // Silenciosamente ignorar erros de polling
+      }
+    });
+  }
+
+  void _stopConversationsPolling() {
+    _conversationsPollingTimer?.cancel();
+    _conversationsPollingTimer = null;
+  }
 
   @override
   void dispose() {
+    _stopConversationsPolling();
     _tabController.dispose();
     _chatController.dispose();
     _searchController.dispose();
+    // Parar polling de mensagens também
+    context.read<MessagesProvider>().stopPolling();
     super.dispose();
   }
 
@@ -135,12 +168,6 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-            onPressed: () {
-              _tabController.animateTo(0); // Ir para tab de batalhas
-            },
-          ),
         ],
       ),
     );
@@ -687,11 +714,15 @@ class _MultiplayerScreenState extends State<MultiplayerScreen> with SingleTicker
                 IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () {
+                    // Parar polling de mensagens quando fechar conversa
+                    context.read<MessagesProvider>().stopPolling();
                     setState(() {
                       _selectedChatUser = null;
                       _selectedChatUserName = null;
                     });
                     _loadConversations();
+                    // Reiniciar polling de conversas
+                    _startConversationsPolling();
                   },
                 ),
                 AvatarWidget(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
@@ -59,6 +60,9 @@ class MessagesProvider extends ChangeNotifier {
   List<Message> _messages = [];
   bool _isLoading = false;
   String? _error;
+  Timer? _pollingTimer;
+  String? _currentConversationUserId;
+  bool _isPollingActive = false;
 
   List<Message> get messages => _messages;
   bool get isLoading => _isLoading;
@@ -97,6 +101,10 @@ class MessagesProvider extends ChangeNotifier {
       _messages = messagesData
           .map((messageJson) => Message.fromJson(messageJson))
           .toList();
+      
+      // Iniciar polling para esta conversa
+      _currentConversationUserId = userId;
+      _startPolling(userId);
     } catch (e) {
       _error = e.toString();
       _messages = [];
@@ -104,6 +112,66 @@ class MessagesProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  void _startPolling(String userId) {
+    // Parar polling anterior se existir
+    _stopPolling();
+    
+    _isPollingActive = true;
+    _currentConversationUserId = userId;
+    
+    // Verificar novas mensagens a cada 2 segundos
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!_isPollingActive || _currentConversationUserId != userId) {
+        timer.cancel();
+        return;
+      }
+      
+      try {
+        final messagesData = await ApiService.getConversation(userId);
+        final newMessages = messagesData
+            .map((messageJson) => Message.fromJson(messageJson))
+            .toList();
+        
+        // Verificar se há novas mensagens comparando IDs e quantidade
+        final currentMessageIds = _messages.map((m) => m.id).toSet();
+        final newMessageIds = newMessages.map((m) => m.id).toSet();
+        
+        // Se houver diferença na quantidade ou nos IDs, atualizar a lista
+        bool hasChanges = false;
+        if (currentMessageIds.length != newMessageIds.length) {
+          hasChanges = true;
+        } else {
+          // Verificar se há IDs novos
+          for (final newId in newMessageIds) {
+            if (!currentMessageIds.contains(newId)) {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+        
+        if (hasChanges) {
+          _messages = newMessages;
+          notifyListeners();
+        }
+      } catch (e) {
+        // Silenciosamente ignorar erros de polling para não interromper a experiência
+        // Apenas logar em debug se necessário
+      }
+    });
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _isPollingActive = false;
+    _currentConversationUserId = null;
+  }
+
+  void stopPolling() {
+    _stopPolling();
   }
 
   Future<void> sendMessage({
@@ -167,6 +235,7 @@ class MessagesProvider extends ChangeNotifier {
   }
 
   void clearMessages() {
+    _stopPolling();
     _messages = [];
     notifyListeners();
   }
@@ -174,6 +243,12 @@ class MessagesProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 }
 

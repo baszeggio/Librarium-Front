@@ -77,6 +77,24 @@ class _RankingScreenState extends State<RankingScreen> {
     return Colors.grey[600]!;
   }
 
+  /// Retorna o widget da foto do perfil se houver, senão um ícone padrão.
+  Widget _buildProfilePhoto(dynamic player, double radius, Color fallbackColor) {
+    final fotoPerfilUrl = player['fotoPerfil'] as String?;
+    if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(fotoPerfilUrl),
+        backgroundColor: fallbackColor.withOpacity(0.1),
+      );
+    } else {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: fallbackColor.withOpacity(0.2),
+        child: Icon(Icons.person, color: fallbackColor, size: radius),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +191,7 @@ class _RankingScreenState extends State<RankingScreen> {
                                       ? player['posicao'] as int 
                                       : (index + 1);
                                   final isTopThree = position <= 3;
+                                  final rankColor = _getRankColor(position);
 
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
@@ -182,7 +201,7 @@ class _RankingScreenState extends State<RankingScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       border: isTopThree
                                           ? Border.all(
-                                              color: _getRankColor(position),
+                                              color: rankColor,
                                               width: 2,
                                             )
                                           : null,
@@ -196,21 +215,14 @@ class _RankingScreenState extends State<RankingScreen> {
                                           child: Text(
                                             _getRankIcon(position),
                                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                              color: _getRankColor(position),
+                                              color: rankColor,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 16),
-                                        // Avatar/Ícone
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: _getRankColor(position).withOpacity(0.2),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: _getRankColor(position),
-                                          ),
-                                        ),
+                                        // Foto de perfil ou ícone padrão
+                                        _buildProfilePhoto(player, 24, rankColor),
                                         const SizedBox(width: 16),
                                         // Informações
                                         Expanded(
@@ -345,28 +357,39 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 
   Widget _buildUserPosition() {
+    final fotoPerfilUrl = _userRanking?['fotoPerfil'] as String?;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            primaryColor.withOpacity(0.2),
             Theme.of(context).colorScheme.secondary.withOpacity(0.2),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
+          color: primaryColor,
         ),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.person,
-            color: Theme.of(context).colorScheme.primary,
-            size: 32,
-          ),
+          // Se houver fotoPerfil, mostra ela
+          if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty)
+            CircleAvatar(
+              radius: 32,
+              backgroundImage: NetworkImage(fotoPerfilUrl),
+              backgroundColor: primaryColor.withOpacity(0.1),
+            )
+          else
+            Icon(
+              Icons.person,
+              color: primaryColor,
+              size: 32,
+            ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -426,4 +449,3 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 }
-

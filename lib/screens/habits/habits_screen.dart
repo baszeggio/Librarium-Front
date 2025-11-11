@@ -225,12 +225,49 @@ class _HabitsScreenState extends State<HabitsScreen> {
                           onComplete: isCompleted
                               ? null
                               : () async {
-                                  await habitsProvider.completeHabit(habit.id);
-                                  // Verificar e recarregar conquistas
                                   try {
-                                    await context.read<AchievementsProvider>().verifyAchievements();
+                                    final result = await habitsProvider.completeHabit(habit.id);
+                                    
+                                    // Processar conquistas desbloqueadas se houver
+                                    final conquistasDesbloqueadas = result['conquistasDesbloqueadas'] as List<dynamic>?;
+                                    final achievementsProvider = context.read<AchievementsProvider>();
+                                    
+                                    if (conquistasDesbloqueadas != null && conquistasDesbloqueadas.isNotEmpty) {
+                                      // Processar conquistas desbloqueadas
+                                      final novasConquistas = achievementsProvider.processUnlockedAchievements(conquistasDesbloqueadas);
+                                      
+                                      // Recarregar conquistas
+                                      await achievementsProvider.loadAchievements();
+                                      
+                                      // Mostrar notificação de conquistas desbloqueadas
+                                      if (context.mounted && novasConquistas.isNotEmpty) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              novasConquistas.length == 1
+                                                  ? '🏆 Conquista desbloqueada: ${novasConquistas.first.titulo}!'
+                                                  : '🏆 ${novasConquistas.length} conquistas desbloqueadas!',
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                            backgroundColor: Colors.amber[700],
+                                            duration: const Duration(seconds: 3),
+                                          ),
+                                        );
+                                      }
+                                    } else {
+                                      // Verificar conquistas mesmo se não vieram na resposta
+                                      await achievementsProvider.verifyAchievements();
+                                    }
                                   } catch (e) {
-                                    print('Erro ao verificar conquistas: $e');
+                                    print('Erro ao concluir hábito: $e');
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Erro: ${e.toString()}'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
                                   }
                                 },
                           onDelete: () {
