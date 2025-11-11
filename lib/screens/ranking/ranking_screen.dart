@@ -81,10 +81,51 @@ class _RankingScreenState extends State<RankingScreen> {
   Widget _buildProfilePhoto(dynamic player, double radius, Color fallbackColor) {
     final fotoPerfilUrl = player['fotoPerfil'] as String?;
     if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) {
+      // Construir URL completa - pode vir já completa ou apenas o path
+      String fotoUrl = fotoPerfilUrl;
+      if (!fotoPerfilUrl.startsWith('http://') && !fotoPerfilUrl.startsWith('https://')) {
+        // Se não começar com http, adicionar o baseUrl (removendo /api)
+        final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+        fotoUrl = '$baseUrl$fotoPerfilUrl';
+      }
+      
       return CircleAvatar(
         radius: radius,
-        backgroundImage: NetworkImage(fotoPerfilUrl),
         backgroundColor: fallbackColor.withOpacity(0.1),
+        child: ClipOval(
+          child: Image.network(
+            // Adicionar query parameter para cache busting
+            '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              // Se erro ao carregar, mostrar ícone padrão
+              return Icon(Icons.person, color: fallbackColor, size: radius);
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: radius * 2,
+                height: radius * 2,
+                color: Colors.grey[800],
+                child: Center(
+                  child: SizedBox(
+                    width: radius,
+                    height: radius,
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       );
     } else {
       return CircleAvatar(
@@ -378,13 +419,58 @@ class _RankingScreenState extends State<RankingScreen> {
       child: Row(
         children: [
           // Se houver fotoPerfil, mostra ela
-          if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty)
-            CircleAvatar(
-              radius: 32,
-              backgroundImage: NetworkImage(fotoPerfilUrl),
-              backgroundColor: primaryColor.withOpacity(0.1),
-            )
-          else
+          if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) ...[
+            Builder(
+              builder: (context) {
+                // Construir URL completa - pode vir já completa ou apenas o path
+                String fotoUrl = fotoPerfilUrl;
+                if (!fotoPerfilUrl.startsWith('http://') && !fotoPerfilUrl.startsWith('https://')) {
+                  // Se não começar com http, adicionar o baseUrl (removendo /api)
+                  final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+                  fotoUrl = '$baseUrl$fotoPerfilUrl';
+                }
+                
+                return CircleAvatar(
+                  radius: 32,
+                  backgroundColor: primaryColor.withOpacity(0.1),
+                  child: ClipOval(
+                    child: Image.network(
+                      // Adicionar query parameter para cache busting
+                      '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Se erro ao carregar, mostrar ícone padrão
+                        return Icon(
+                          Icons.person,
+                          color: primaryColor,
+                          size: 32,
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: 64,
+                          height: 64,
+                          color: Colors.grey[800],
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ] else
             Icon(
               Icons.person,
               color: primaryColor,
