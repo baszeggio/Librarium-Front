@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../providers/stats_provider.dart';
 import '../../widgets/stats_card.dart';
 
@@ -44,8 +43,6 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: CircularProgressIndicator(),
                 );
               }
-
-              // Mesmo com erro, exibir conteúdo com fallback mock
               return _buildStatsContent(statsProvider);
             },
           ),
@@ -67,7 +64,6 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildStatsContent(StatsProvider statsProvider) {
-    // Usar apenas dados reais do provider
     if (statsProvider.stats == null) {
       return Center(
         child: Column(
@@ -78,14 +74,14 @@ class _StatsScreenState extends State<StatsScreen> {
             Text(
               'Carregando estatísticas...',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.grey[400],
-              ),
+                    color: Colors.grey[400],
+                  ),
             ),
           ],
         ),
       );
     }
-    
+
     final Stats stats = statsProvider.stats!;
 
     return SingleChildScrollView(
@@ -93,89 +89,72 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          _buildHeader(statsProvider),
+          const SizedBox(height: 24),
+          _buildProminentStreakCards(stats),
+          const SizedBox(height: 24),
+          _buildMainStatsCards(stats),
+          const SizedBox(height: 24),
+          _buildCategoryStats(stats),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(StatsProvider statsProvider) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              ),
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              children: [
-                // Botão de voltar mais visível
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        context.go('/dashboard');
-                      }
-                    },
-                    icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
-                    tooltip: 'Voltar',
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  'Estatísticas',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                // Botão de refresh
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF14181C),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      statsProvider.loadStats();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    color: Colors.white,
-                    tooltip: 'Atualizar',
-                  ),
-                ),
-              ],
+            child: IconButton(
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                } else {
+                  context.go('/dashboard');
+                }
+              },
+              icon: const Icon(Icons.arrow_back),
+              color: Colors.white,
+              tooltip: 'Voltar',
             ),
           ),
-
-          const SizedBox(height: 24),
-
-          // Sequência em destaque no topo (MAIOR E MAIS VISÍVEL)
-          _buildProminentStreakCards(stats),
-
-          const SizedBox(height: 24),
-
-          // Cards de estatísticas principais
-          _buildMainStatsCards(stats),
-
-          const SizedBox(height: 24),
-
-          // Gráfico semanal
-          _buildWeeklyChart(stats),
-
-          const SizedBox(height: 24),
-
-          // Estatísticas por categoria
-          _buildCategoryStats(stats),
-
-          const SizedBox(height: 24),
-
-          // Estatísticas de sequência
-          _buildStreakStats(stats),
+          const SizedBox(width: 16),
+          Text(
+            'Estatísticas',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const Spacer(),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF14181C),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              onPressed: () {
+                statsProvider.loadStats();
+              },
+              icon: const Icon(Icons.refresh),
+              color: Colors.white,
+              tooltip: 'Atualizar',
+            ),
+          ),
         ],
       ),
     );
@@ -188,10 +167,10 @@ class _StatsScreenState extends State<StatsScreen> {
         Text(
           'Sequência',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+              ),
         ),
         const SizedBox(height: 16),
         Row(
@@ -224,25 +203,25 @@ class _StatsScreenState extends State<StatsScreen> {
                     Text(
                       '${stats.currentStreak}',
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 42,
-                      ),
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 42,
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Sequência Atual',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'dias consecutivos',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[400],
-                      ),
+                            color: Colors.grey[400],
+                          ),
                     ),
                   ],
                 ),
@@ -277,25 +256,25 @@ class _StatsScreenState extends State<StatsScreen> {
                     Text(
                       '${stats.longestStreak}',
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 42,
-                      ),
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 42,
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Maior Sequência',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'dias consecutivos',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[400],
-                      ),
+                            color: Colors.grey[400],
+                          ),
                     ),
                   ],
                 ),
@@ -308,15 +287,41 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildMainStatsCards(Stats stats) {
+    final nivel = stats.level;
+    int xpNecessarioParaNivelAtual = 0;
+    int xpNecessarioParaProximoNivel = 0;
+
+    if (nivel <= 1) {
+      xpNecessarioParaNivelAtual = 0;
+      xpNecessarioParaProximoNivel = 100;
+    } else if (nivel < 10) {
+      xpNecessarioParaNivelAtual = (nivel - 1) * 100;
+      xpNecessarioParaProximoNivel = nivel * 100;
+    } else if (nivel < 20) {
+      xpNecessarioParaNivelAtual = 900 + ((nivel - 10) * 200);
+      xpNecessarioParaProximoNivel = 1000 + ((nivel - 10) * 200);
+    } else if (nivel < 30) {
+      xpNecessarioParaNivelAtual = 2900 + ((nivel - 20) * 300);
+      xpNecessarioParaProximoNivel = 3000 + ((nivel - 20) * 300);
+    } else {
+      xpNecessarioParaNivelAtual = 5900 + ((nivel - 30) * 400);
+      xpNecessarioParaProximoNivel = 6000 + ((nivel - 30) * 400);
+    }
+    final xpParaProximoNivel = xpNecessarioParaProximoNivel - xpNecessarioParaNivelAtual;
+    final xpAtualNoNivel = (stats.totalXP - xpNecessarioParaNivelAtual).clamp(0, xpParaProximoNivel);
+    final progressoXP = xpParaProximoNivel > 0
+        ? (xpAtualNoNivel / xpParaProximoNivel).clamp(0.0, 1.0)
+        : 1.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Resumo Geral',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 16),
         Row(
@@ -342,67 +347,90 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildWeeklyChart(Stats stats) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Atividade Semanal',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
             ),
           ),
-          const SizedBox(height: 20),
-          // Gráfico simplificado sem FL Chart
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A0E12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    Icons.trending_up,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
                   Text(
-                    'Gráfico em Desenvolvimento',
+                    'Nível ${stats.level}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  Text(
+                    'Nível ${stats.level + 1}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
+                          color: Colors.grey[400],
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Stack(
+                children: [
+                  Container(
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[800],
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Em breve você verá seus dados aqui!',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[400],
+                  FractionallySizedBox(
+                    widthFactor: progressoXP,
+                    child: Container(
+                      height: 24,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(context).colorScheme.secondary,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '$xpAtualNoNivel / $xpParaProximoNivel XP',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                        ),
+                  ),
+                  Text(
+                    '${(progressoXP * 100).toInt()}%',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -413,9 +441,9 @@ class _StatsScreenState extends State<StatsScreen> {
         Text(
           'Por Categoria',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 16),
         ...stats.categoryStats.entries.map((entry) {
@@ -444,15 +472,15 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: Text(
                       _getCategoryDisplayName(category),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                      ),
+                            color: Colors.white,
+                          ),
                     ),
                   ),
                   Text(
                     '$count hábitos',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[400],
-                    ),
+                          color: Colors.grey[400],
+                        ),
                   ),
                 ],
               ),
@@ -463,81 +491,7 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildStreakStats(Stats stats) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Sequências',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStreakItem(
-                    'Atual',
-                    '${stats.currentStreak}',
-                    Icons.local_fire_department,
-                    Colors.orange,
-                  ),
-                  _buildStreakItem(
-                    'Maior',
-                    '${stats.longestStreak}',
-                    Icons.whatshot,
-                    Colors.red,
-                  ),
-                  _buildStreakItem(
-                    'Total',
-                    '${stats.totalHabits}',
-                    Icons.checklist,
-                    Colors.blue,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStreakItem(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 32),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey[400],
-          ),
-        ),
-      ],
-    );
-  }
-
+  
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {

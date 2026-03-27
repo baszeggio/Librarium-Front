@@ -57,8 +57,12 @@ class StatsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Usar getUserDashboard que retorna estatísticas completas do usuário
-      final dashboardData = await ApiService.getUserDashboard();
+      // Buscar dashboard e dados semanais em paralelo
+      final dashboardFuture = ApiService.getUserDashboard();
+      final weeklyChartFuture = ApiService.getWeeklyChart();
+      
+      final dashboardData = await dashboardFuture;
+      final weeklyChartData = await weeklyChartFuture;
       
       if (dashboardData['sucesso'] == true && dashboardData['dashboard'] != null) {
         final dashboard = dashboardData['dashboard'];
@@ -66,18 +70,66 @@ class StatsProvider extends ChangeNotifier {
         final usuario = dashboard['usuario'] ?? {};
         final sequencia = usuario['sequencia'] ?? {};
         
+        // Calcular estatísticas de categoria se houver hábitos
+        Map<String, int> categoryStats = {};
+        if (dashboard['habitos'] != null) {
+          final habits = dashboard['habitos'] as List;
+          for (var habit in habits) {
+            if (habit is Map && habit['categoria'] != null) {
+              final categoria = habit['categoria'].toString();
+              categoryStats[categoria] = (categoryStats[categoria] ?? 0) + 1;
+            }
+          }
+        }
+        
+        // Processar dados semanais reais
+        List<Map<String, dynamic>> weeklyData = [];
+        if (weeklyChartData['sucesso'] == true && weeklyChartData['graficoSemanal'] != null) {
+          final graficoSemanal = weeklyChartData['graficoSemanal'] as List;
+          
+          // Garantir que temos 7 dias (da mais antiga até hoje)
+          final hoje = DateTime.now();
+          final diasSemana = <String, Map<String, dynamic>>{};
+          
+          // Inicializar todos os 7 dias
+          for (int i = 6; i >= 0; i--) {
+            final data = hoje.subtract(Duration(days: i));
+            final dataString = '${data.year}-${data.month.toString().padLeft(2, '0')}-${data.day.toString().padLeft(2, '0')}';
+            diasSemana[dataString] = {
+              'data': dataString,
+              'concluidos': 0,
+              'perdidos': 0,
+              'experiencia': 0,
+              'habitos': []
+            };
+          }
+          
+          // Preencher com dados reais da API
+          for (var dia in graficoSemanal) {
+            if (dia is Map<String, dynamic> && dia['data'] != null) {
+              final dataString = dia['data'].toString().split('T')[0];
+              if (diasSemana.containsKey(dataString)) {
+                diasSemana[dataString] = Map<String, dynamic>.from(dia);
+              }
+            }
+          }
+          
+          // Converter para lista ordenada
+          weeklyData = diasSemana.values.toList();
+        }
+        
         // Mapear os campos do backend para o modelo Stats
         _stats = Stats(
           totalHabits: statsHoje['totalHabitos'] ?? 
                       (dashboard['habitos'] as List?)?.length ?? 0,
           completedHabits: statsHoje['habitosConcluidos'] ?? 0,
-          currentStreak: sequencia['atual'] ?? 0,
-          longestStreak: sequencia['maiorSequencia'] ?? 0,
+          currentStreak: sequencia['atual'] ?? sequencia['sequenciaAtual'] ?? 0,
+          longestStreak: sequencia['maiorSequencia'] ?? sequencia['maior'] ?? 0,
           completionRate: (statsHoje['porcentagemConclusao'] ?? 0.0) / 100.0,
           totalXP: usuario['experiencia'] ?? 0,
           level: usuario['nivel'] ?? 1,
-          categoryStats: {}, // Será preenchido se necessário
-          weeklyData: [],
+          categoryStats: categoryStats,
+          weeklyData: weeklyData,
           monthlyData: [],
         );
       } else {

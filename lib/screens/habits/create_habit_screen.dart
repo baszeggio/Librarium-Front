@@ -16,20 +16,41 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   String _selectedFrequency = 'diario';
-  String _selectedCategory = 'geral';
+  String _selectedCategory = 'pessoal';
   String _selectedDifficulty = 'medio';
   String _selectedIcon = 'espada';
-  String _selectedColor = '#6A0572';
+  String _selectedColor = '#8B5CF6';
 
+  // from backend enum ['diario', 'semanal', 'mensal']
   final List<String> _frequencies = ['diario', 'semanal', 'mensal'];
-  final List<String> _categories = ['geral', 'saude', 'estudo', 'trabalho', 'casa', 'social'];
+  // from backend enum ['saude', 'estudo', 'trabalho', 'pessoal', 'social', 'criativo']
+  final List<String> _categories = ['saude', 'estudo', 'trabalho', 'pessoal', 'social', 'criativo'];
+  // from backend enum ['facil', 'medio', 'dificil', 'lendario']
   final List<String> _difficulties = ['facil', 'medio', 'dificil', 'lendario'];
-  final List<String> _icons = ['espada', 'livro', 'coracao', 'cerebro', 'trabalho', 'casa', 'dinheiro', 'tempo'];
+  final List<String> _icons = [
+    'espada', // padrão do backend
+    'livro',
+    'coracao',
+    'cerebro',
+    'trabalho',
+    'casa',
+    'dinheiro',
+    'tempo'
+  ];
+  // Default backend color and more
   final List<String> _colors = [
-    '#6A0572', '#9A031E', '#F77F00', '#238636', '#DA3633', 
-    '#0969DA', '#8250DF', '#FF6B6B', '#4ECDC4', '#45B7D1'
+    '#8B5CF6',
+    '#9A031E',
+    '#F77F00',
+    '#238636',
+    '#DA3633',
+    '#0969DA',
+    '#8250DF',
+    '#FF6B6B',
+    '#4ECDC4',
+    '#45B7D1'
   ];
 
   @override
@@ -84,7 +105,7 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
           } catch (e) {
             print('Erro ao verificar conquistas após criar hábito: $e');
           }
-          
+
           if (mounted) {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -185,6 +206,9 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
                                 if (value == null || value.isEmpty) {
                                   return 'Título é obrigatório';
                                 }
+                                if (value.length > 100) {
+                                  return 'Título deve ter no máximo 100 caracteres';
+                                }
                                 return null;
                               },
                             ),
@@ -197,6 +221,12 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
                               label: 'Descrição',
                               hint: 'Descreva seu hábito...',
                               maxLines: 3,
+                              validator: (value) {
+                                if (value != null && value.length > 500) {
+                                  return 'Descrição deve ter no máximo 500 caracteres';
+                                }
+                                return null;
+                              },
                             ),
 
                             const SizedBox(height: 24),
@@ -308,12 +338,12 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: isSelected 
+              color: isSelected
                   ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected 
+                color: isSelected
                     ? Theme.of(context).colorScheme.primary
                     : Colors.grey.withOpacity(0.3),
               ),
@@ -343,12 +373,12 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: isSelected 
+              color: isSelected
                   ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
                   : Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected 
+                color: isSelected
                     ? Theme.of(context).colorScheme.primary
                     : Colors.grey.withOpacity(0.3),
                 width: 2,
@@ -356,7 +386,7 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             ),
             child: Icon(
               _getHabitIcon(icon),
-              color: isSelected 
+              color: isSelected
                   ? Theme.of(context).colorScheme.primary
                   : Colors.grey[400],
             ),
@@ -380,7 +410,7 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
             decoration: BoxDecoration(
               color: Color(int.parse(color.replaceFirst('#', '0xFF'))),
               shape: BoxShape.circle,
-              border: isSelected 
+              border: isSelected
                   ? Border.all(color: Colors.white, width: 3)
                   : null,
             ),
@@ -431,18 +461,18 @@ class _CreateHabitScreenState extends State<CreateHabitScreen> {
 
   String _getCategoryText(String categoria) {
     switch (categoria.toLowerCase()) {
-      case 'geral':
-        return 'Geral';
       case 'saude':
         return 'Saúde';
       case 'estudo':
         return 'Estudo';
       case 'trabalho':
         return 'Trabalho';
-      case 'casa':
-        return 'Casa';
+      case 'pessoal':
+        return 'Pessoal';
       case 'social':
         return 'Social';
+      case 'criativo':
+        return 'Criativo';
       default:
         return categoria;
     }

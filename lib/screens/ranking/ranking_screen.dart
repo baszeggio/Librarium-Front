@@ -77,6 +77,65 @@ class _RankingScreenState extends State<RankingScreen> {
     return Colors.grey[600]!;
   }
 
+  /// Retorna o widget da foto do perfil se houver, senão um ícone padrão.
+  Widget _buildProfilePhoto(dynamic player, double radius, Color fallbackColor) {
+    final fotoPerfilUrl = player['fotoPerfil'] as String?;
+    if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) {
+      // Construir URL completa - pode vir já completa ou apenas o path
+      String fotoUrl = fotoPerfilUrl;
+      if (!fotoPerfilUrl.startsWith('http://') && !fotoPerfilUrl.startsWith('https://')) {
+        // Se não começar com http, adicionar o baseUrl (removendo /api)
+        final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+        fotoUrl = '$baseUrl$fotoPerfilUrl';
+      }
+      
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: fallbackColor.withOpacity(0.1),
+        child: ClipOval(
+          child: Image.network(
+            // Adicionar query parameter para cache busting
+            '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              // Se erro ao carregar, mostrar ícone padrão
+              return Icon(Icons.person, color: fallbackColor, size: radius);
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: radius * 2,
+                height: radius * 2,
+                color: Colors.grey[800],
+                child: Center(
+                  child: SizedBox(
+                    width: radius,
+                    height: radius,
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } else {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: fallbackColor.withOpacity(0.2),
+        child: Icon(Icons.person, color: fallbackColor, size: radius),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +232,7 @@ class _RankingScreenState extends State<RankingScreen> {
                                       ? player['posicao'] as int 
                                       : (index + 1);
                                   final isTopThree = position <= 3;
+                                  final rankColor = _getRankColor(position);
 
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
@@ -182,7 +242,7 @@ class _RankingScreenState extends State<RankingScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       border: isTopThree
                                           ? Border.all(
-                                              color: _getRankColor(position),
+                                              color: rankColor,
                                               width: 2,
                                             )
                                           : null,
@@ -196,21 +256,14 @@ class _RankingScreenState extends State<RankingScreen> {
                                           child: Text(
                                             _getRankIcon(position),
                                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                              color: _getRankColor(position),
+                                              color: rankColor,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 16),
-                                        // Avatar/Ícone
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: _getRankColor(position).withOpacity(0.2),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: _getRankColor(position),
-                                          ),
-                                        ),
+                                        // Foto de perfil ou ícone padrão
+                                        _buildProfilePhoto(player, 24, rankColor),
                                         const SizedBox(width: 16),
                                         // Informações
                                         Expanded(
@@ -345,28 +398,84 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 
   Widget _buildUserPosition() {
+    final fotoPerfilUrl = _userRanking?['fotoPerfil'] as String?;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            primaryColor.withOpacity(0.2),
             Theme.of(context).colorScheme.secondary.withOpacity(0.2),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
+          color: primaryColor,
         ),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.person,
-            color: Theme.of(context).colorScheme.primary,
-            size: 32,
-          ),
+          // Se houver fotoPerfil, mostra ela
+          if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) ...[
+            Builder(
+              builder: (context) {
+                // Construir URL completa - pode vir já completa ou apenas o path
+                String fotoUrl = fotoPerfilUrl;
+                if (!fotoPerfilUrl.startsWith('http://') && !fotoPerfilUrl.startsWith('https://')) {
+                  // Se não começar com http, adicionar o baseUrl (removendo /api)
+                  final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+                  fotoUrl = '$baseUrl$fotoPerfilUrl';
+                }
+                
+                return CircleAvatar(
+                  radius: 32,
+                  backgroundColor: primaryColor.withOpacity(0.1),
+                  child: ClipOval(
+                    child: Image.network(
+                      // Adicionar query parameter para cache busting
+                      '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Se erro ao carregar, mostrar ícone padrão
+                        return Icon(
+                          Icons.person,
+                          color: primaryColor,
+                          size: 32,
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: 64,
+                          height: 64,
+                          color: Colors.grey[800],
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ] else
+            Icon(
+              Icons.person,
+              color: primaryColor,
+              size: 32,
+            ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -426,4 +535,3 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 }
-

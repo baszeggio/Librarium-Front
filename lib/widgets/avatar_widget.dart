@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../providers/avatar_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 
 class AvatarWidget extends StatelessWidget {
   final Avatar? avatar;
   final double size;
   final bool showLevel;
   final bool showProgress;
+  final String? fotoPerfilUrl; // URL da foto de perfil
 
   const AvatarWidget({
     super.key,
@@ -13,10 +17,200 @@ class AvatarWidget extends StatelessWidget {
     this.size = 60,
     this.showLevel = true,
     this.showProgress = false,
+    this.fotoPerfilUrl,
   });
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        // Se fotoPerfilUrl foi passado (mesmo que null), usar APENAS ele
+        // Não fazer fallback para foto do usuário logado quando mostrando avatar de outra pessoa
+        // O fallback só acontece quando fotoPerfilUrl não é passado (null) E useLoggedUserPhotoAsFallback é true
+        final String? fotoPerfil;
+        
+        if (fotoPerfilUrl != null) {
+          // Se fotoPerfilUrl foi passado, usar APENAS ele (mesmo que seja string vazia)
+          // Não fazer fallback para foto do usuário logado - isso garante que mostramos
+          // a foto correta da pessoa específica (ranking, mensagens, etc)
+          fotoPerfil = fotoPerfilUrl!.isEmpty ? null : fotoPerfilUrl;
+        } else {
+          // Se fotoPerfilUrl não foi passado, usar foto do usuário logado (para o próprio perfil)
+          fotoPerfil = authProvider.user?['fotoPerfil'] as String?;
+        }
+        
+        // Se tiver foto de perfil, mostrar ela (prioridade sobre avatar)
+        if (fotoPerfil != null && fotoPerfil.isNotEmpty) {
+          // Construir URL completa - pode vir já completa ou apenas o path
+          String fotoUrl = fotoPerfil;
+          if (!fotoPerfil.startsWith('http://') && !fotoPerfil.startsWith('https://')) {
+            // Se não começar com http, adicionar o baseUrl (removendo /api)
+            final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+            fotoUrl = '$baseUrl$fotoPerfil';
+          }
+          
+          return Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 15,
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.network(
+                // Adicionar query parameter para cache busting (usa timestamp completo para garantir atualização imediata)
+                '$fotoUrl?t=${DateTime.now().millisecondsSinceEpoch}',
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                cacheWidth: size.toInt(),
+                cacheHeight: size.toInt(),
+                errorBuilder: (context, error, stackTrace) {
+                  // Se erro ao carregar, mostrar avatar padrão
+                  return _buildDefaultAvatar(context);
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: size,
+                    height: size,
+                    color: Colors.grey[800],
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+        
+        // Se não tiver foto de perfil, mostrar avatar padrão
+        if (avatar == null) {
+          return _buildPlaceholder(context);
+        }
+
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.secondary,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 3,
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Avatar principal (imagem de cabeça se disponível, senão ícone)
+              Center(
+                child: Container(
+                  width: size - 8,
+                  height: size - 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: ClipOval(
+                      child: Builder(
+                        builder: (context) {
+                          final headAsset = avatar!.headAsset;
+                          if (headAsset != null) {
+                            return SizedBox(
+                              width: (size - 8) * 0.7,
+                              height: (size - 8) * 0.7,
+                              child: Image.asset(
+                                headAsset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    _getAvatarIcon(avatar!.nivel),
+                                    size: size * 0.5,
+                                    color: Colors.white,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                          return Icon(
+                            _getAvatarIcon(avatar!.nivel),
+                            size: size * 0.5,
+                            color: Colors.white,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Nível do avatar
+              if (showLevel)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      '${avatar!.nivel}',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size * 0.15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              
+              // Efeitos especiais
+              if (avatar!.efeitos.isNotEmpty)
+                ...avatar!.efeitos.map((efeito) => _buildEffect(efeito)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDefaultAvatar(BuildContext context) {
     if (avatar == null) {
       return _buildPlaceholder(context);
     }
@@ -32,93 +226,11 @@ class AvatarWidget extends StatelessWidget {
             Theme.of(context).colorScheme.secondary,
           ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            blurRadius: 15,
-            spreadRadius: 3,
-          ),
-        ],
       ),
-      child: Stack(
-        children: [
-          // Avatar principal (imagem de cabeça se disponível, senão ícone)
-          Center(
-            child: Container(
-              width: size - 8,
-              height: size - 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.1),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-              ),
-              child: Center(
-                child: ClipOval(
-                  child: Builder(
-                    builder: (context) {
-                      final headAsset = avatar!.headAsset;
-                      if (headAsset != null) {
-                        return SizedBox(
-                          width: (size - 8) * 0.7,
-                          height: (size - 8) * 0.7,
-                          child: Image.asset(
-                            headAsset,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                _getAvatarIcon(avatar!.nivel),
-                                size: size * 0.5,
-                                color: Colors.white,
-                              );
-                            },
-                          ),
-                        );
-                      }
-                      return Icon(
-                        _getAvatarIcon(avatar!.nivel),
-                        size: size * 0.5,
-                        color: Colors.white,
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-          
-          // Nível do avatar
-          if (showLevel)
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
-                ),
-                child: Text(
-                  '${avatar!.nivel}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: size * 0.15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          
-          // Efeitos especiais
-          if (avatar!.efeitos.isNotEmpty)
-            ...avatar!.efeitos.map((efeito) => _buildEffect(efeito)),
-        ],
+      child: Icon(
+        _getAvatarIcon(avatar!.nivel),
+        size: size * 0.5,
+        color: Colors.white,
       ),
     );
   }

@@ -5,6 +5,8 @@ class Battle {
   final String id;
   final String jogador1;
   final String jogador2;
+  final String? jogador1Id; // ID do jogador1
+  final String? jogador2Id; // ID do jogador2
   final String tipoBatalha;
   final String status;
   final DateTime? dataInicio;
@@ -17,6 +19,8 @@ class Battle {
     required this.id,
     required this.jogador1,
     required this.jogador2,
+    this.jogador1Id,
+    this.jogador2Id,
     required this.tipoBatalha,
     required this.status,
     this.dataInicio,
@@ -27,10 +31,40 @@ class Battle {
   });
 
   factory Battle.fromJson(Map<String, dynamic> json) {
+    // Extrair ID do jogador1 (pode ser ObjectId ou objeto populado)
+    String? jogador1Id;
+    if (json['jogador1'] is Map) {
+      // Se for objeto populado, pegar o _id
+      jogador1Id = json['jogador1']?['_id']?.toString() ?? 
+                   json['jogador1']?['id']?.toString();
+    } else if (json['jogador1'] != null) {
+      // Se for string/ObjectId direto
+      jogador1Id = json['jogador1'].toString();
+    }
+    
+    // Debug
+    print('Battle.fromJson - jogador1: ${json['jogador1']}, jogador1Id extraído: $jogador1Id');
+
+    // Extrair ID do jogador2 (pode ser ObjectId ou objeto populado)
+    String? jogador2Id;
+    if (json['jogador2'] is Map) {
+      // Se for objeto populado, pegar o _id
+      jogador2Id = json['jogador2']?['_id']?.toString() ?? 
+                   json['jogador2']?['id']?.toString();
+    } else if (json['jogador2'] != null) {
+      // Se for string/ObjectId direto
+      jogador2Id = json['jogador2'].toString();
+    }
+    
+    // Debug
+    print('Battle.fromJson - jogador2: ${json['jogador2']}, jogador2Id extraído: $jogador2Id');
+
     return Battle(
       id: json['_id'] ?? json['id'] ?? '',
-      jogador1: json['jogador1']?['nomeUsuario'] ?? json['jogador1'] ?? '',
-      jogador2: json['jogador2']?['nomeUsuario'] ?? json['jogador2'] ?? '',
+      jogador1: json['jogador1']?['nomeUsuario'] ?? json['jogador1']?.toString() ?? '',
+      jogador2: json['jogador2']?['nomeUsuario'] ?? json['jogador2']?.toString() ?? '',
+      jogador1Id: jogador1Id,
+      jogador2Id: jogador2Id,
       tipoBatalha: json['tipoBatalha'] ?? '',
       status: json['status'] ?? 'aguardando',
       dataInicio: json['dataInicio'] != null 
@@ -110,11 +144,18 @@ class MultiplayerProvider extends ChangeNotifier {
     try {
       final battlesData = await ApiService.getBattles();
       _battles = battlesData
-          .map((battleJson) => Battle.fromJson(battleJson))
+          .map((battleJson) {
+            final battle = Battle.fromJson(battleJson);
+            // Debug: imprimir informações da batalha
+            print('Batalha carregada: id=${battle.id}, jogador1Id=${battle.jogador1Id}, jogador2Id=${battle.jogador2Id}, status=${battle.status}');
+            return battle;
+          })
           .toList();
+      print('Total de batalhas carregadas: ${_battles.length}');
     } catch (e) {
       _error = e.toString();
       _battles = [];
+      print('Erro ao carregar batalhas: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

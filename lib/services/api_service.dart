@@ -1,11 +1,30 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image/image.dart' as img;
+
+// Exceção customizada para incluir status code HTTP
+class ApiHttpException implements Exception {
+  final String message;
+  final int? statusCode;
+  
+  ApiHttpException(this.message, {this.statusCode});
+  
+  @override
+  String toString() => message;
+  
+  bool get isUnauthorized => statusCode == 401;
+  bool get isForbidden => statusCode == 403;
+  bool get isBadRequest => statusCode == 400;
+  bool get isAuthError => isUnauthorized || isForbidden;
+}
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:3000/api';
-  // Para produção, altere para: 'https://seu-app.railway.app/api'
-  
+  // static const String baseUrl = 'http://192.168.0.107:3000/api';
+  static const String baseUrl = 'http://10.0.31.223:3000/api';
+
   static Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -92,38 +111,299 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getProfile() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Criar exceção com status code para tratamento diferenciado
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao carregar perfil';
+        final exception = ApiHttpException(errorMsg, statusCode: response.statusCode);
+        throw exception;
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> profileData) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/auth/perfil'),
-      headers: await _getHeaders(),
-      body: jsonEncode(profileData),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/perfil'),
+        headers: await _getHeaders(),
+        body: jsonEncode(profileData),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao atualizar perfil';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique a conexão.');
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadFotoPerfil(String filePath) async {
+    try {
+      // Verificar se o arquivo existe
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception('Arquivo de imagem não encontrado: $filePath');
+      }
+
+      // Verificar tamanho do arquivo (máximo 5MB)
+      final originalSize = await file.length();
+      if (originalSize > 5 * 1024 * 1024) {
+        throw Exception('Arquivo muito grande. Máximo permitido: 5MB');
+      }
+
+      if (originalSize == 0) {
+        throw Exception('Arquivo de imagem está vazio');
+      }
+
+      print('Iniciando otimização de imagem: $filePath (${originalSize} bytes)');
+
+      // Otimizar a imagem antes do upload
+      final optimizedBytes = await _optimizeImage(filePath);
+      if (optimizedBytes == null) {
+        throw Exception('Erro ao otimizar imagem');
+      }
+
+      print('Imagem otimizada: ${originalSize} bytes -> ${optimizedBytes.length} bytes (${((1 - optimizedBytes.length / originalSize) * 100).toStringAsFixed(1)}% de redução)');
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      
+      if (token == null) {
+        throw Exception('Token não encontrado. Faça login novamente.');
+      }
+
+      // Usar multipart para upload de arquivo
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/usuarios/foto-perfil'),
+      );
+
+      // Adicionar token de autenticação
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Adicionar arquivo com validação e Content-Type explícito
+      try {
+        // Determinar o tipo MIME baseado na extensão do arquivo
+        String contentType = 'image/jpeg'; // Padrão
+        final extension = filePath.toLowerCase().split('.').last;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            contentType = 'image/jpeg';
+            break;
+          case 'png':
+            contentType = 'image/png';
+            break;
+          case 'gif':
+            contentType = 'image/gif';
+            break;
+          case 'webp':
+            contentType = 'image/webp';
+            break;
+          default:
+            contentType = 'image/jpeg'; // Fallback
+        }
+
+        print('Tipo MIME detectado: $contentType para extensão: jpg (sempre JPEG após otimização)');
+
+        // Criar MultipartFile usando os bytes otimizados
+        final multipartFile = http.MultipartFile.fromBytes(
+          'foto',
+          optimizedBytes,
+          filename: 'foto.jpg', // Sempre JPEG após otimização
+        );
+        
+        request.files.add(multipartFile);
+        print('Arquivo otimizado adicionado ao request: ${multipartFile.filename} (Tamanho: ${optimizedBytes.length} bytes)');
+      } catch (fileError) {
+        print('Erro ao criar MultipartFile: $fileError');
+        throw Exception('Erro ao processar arquivo de imagem: ${fileError.toString()}');
+      }
+
+      // Enviar requisição
+      print('Enviando requisição para o servidor...');
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('Resposta recebida: Status ${response.statusCode}');
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        String errorMsg = 'Erro ao fazer upload da foto';
+        
+        try {
+          final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+          errorMsg = decodedResponse['mensagem'] ?? 
+                    decodedResponse['message'] ?? 
+                    decodedResponse['erro'] ??
+                    decodedResponse['error'] ??
+                    errorMsg;
+        } catch (e) {
+          // Se não conseguir decodificar, usar a resposta bruta
+          errorMsg = response.body.isNotEmpty 
+              ? response.body 
+              : 'Erro HTTP ${response.statusCode}';
+        }
+        
+        // Usar ApiHttpException para manter consistência
+        throw ApiHttpException(errorMsg, statusCode: response.statusCode);
+      }
+
+      final responseData = jsonDecode(response.body);
+      print('Upload concluído com sucesso!');
+      return responseData;
+    } catch (e) {
+      print('Erro no uploadFotoPerfil: $e');
+      
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor. Verifique sua conexão.');
+      }
+      
+      if (e.toString().contains('FileNotFoundException') || 
+          e.toString().contains('No such file')) {
+        throw Exception('Arquivo de imagem não encontrado. Tente selecionar novamente.');
+      }
+      
+      if (e.toString().contains('Permission denied') || 
+          e.toString().contains('permission')) {
+        throw Exception('Permissão negada para acessar o arquivo.');
+      }
+      
+      rethrow;
+    }
+  }
+
+  /// Otimiza uma imagem antes do upload
+  /// Redimensiona para máximo 800x800 e comprime para JPEG com qualidade 85
+  static Future<Uint8List?> _optimizeImage(String filePath) async {
+    try {
+      final file = File(filePath);
+      final imageBytes = await file.readAsBytes();
+      final originalImage = img.decodeImage(imageBytes);
+      
+      if (originalImage == null) {
+        print('Erro: Não foi possível decodificar a imagem');
+        return null;
+      }
+
+      // Redimensionar se necessário (máximo 800x800 mantendo proporção)
+      img.Image resizedImage = originalImage;
+      const int maxSize = 800;
+      
+      if (originalImage.width > maxSize || originalImage.height > maxSize) {
+        if (originalImage.width > originalImage.height) {
+          resizedImage = img.copyResize(
+            originalImage,
+            width: maxSize,
+            maintainAspect: true,
+          );
+        } else {
+          resizedImage = img.copyResize(
+            originalImage,
+            height: maxSize,
+            maintainAspect: true,
+          );
+        }
+        print('Imagem redimensionada: ${originalImage.width}x${originalImage.height} -> ${resizedImage.width}x${resizedImage.height}');
+      }
+
+      // Converter para JPEG com qualidade 85 (boa qualidade, tamanho reduzido)
+      final optimizedBytes = img.encodeJpg(resizedImage, quality: 85);
+      
+      return Uint8List.fromList(optimizedBytes);
+    } catch (e) {
+      print('Erro ao otimizar imagem: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> removerFotoPerfil() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/usuarios/foto-perfil'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao remover foto';
+        throw Exception(errorMsg);
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> verifyToken() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/verificar'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/verificar'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Token inválido'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao verificar token'};
+    }
   }
 
   // ========== HABITS ENDPOINTS ==========
   static Future<List<dynamic>> getHabits() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/habitos'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data['habitos'] ?? [];
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/habitos'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return [];
+      }
+      
+      final data = jsonDecode(response.body);
+      return data['habitos'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> getHabit(String habitId) async {
@@ -161,11 +441,33 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> completeHabit(String habitId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/habitos/$habitId/concluir'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/habitos/$habitId/concluir'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode == 404) {
+        throw Exception('Hábito já foi concluído hoje');
+      }
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao concluir hábito';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getHabitProgress(String habitId) async {
@@ -391,19 +693,37 @@ class ApiService {
 
   // ========== USER ENDPOINTS ==========
   static Future<Map<String, dynamic>> getUserDashboard() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/dashboard'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/dashboard'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar dashboard'};
+    }
   }
 
   static Future<Map<String, dynamic>> getUserStats() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/usuarios/estatisticas'),
-      headers: await _getHeaders(),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/usuarios/estatisticas'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'sucesso': false, 'mensagem': 'Erro ao carregar estatísticas'};
+    }
   }
 
   static Future<List<dynamic>> getRanking() async {
@@ -442,12 +762,30 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> customizeAvatar(Map<String, dynamic> customization) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/usuarios/avatar/customizar'),
-      headers: await _getHeaders(),
-      body: jsonEncode(customization),
-    );
-    return jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/usuarios/avatar/customizar'),
+        headers: await _getHeaders(),
+        body: jsonEncode(customization),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao customizar avatar';
+        throw Exception(errorMsg);
+      }
+      
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> exportUserData() async {
@@ -545,6 +883,15 @@ class ApiService {
     return data['batalhas'] ?? [];
   }
 
+  static Future<List<dynamic>> getPendingBattles() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/batalha/pendentes'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['batalhas'] ?? [];
+  }
+
   static Future<Map<String, dynamic>> createBattle(Map<String, dynamic> battleData) async {
     final response = await http.post(
       Uri.parse('$baseUrl/multiplayer/batalha/criar'),
@@ -600,12 +947,39 @@ class ApiService {
 
   // Mensagens
   static Future<Map<String, dynamic>> sendMessage(Map<String, dynamic> messageData) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/multiplayer/mensagem'),
-      headers: await _getHeaders(),
-      body: jsonEncode(messageData),
-    );
-    return jsonDecode(response.body);
+    try {
+      // Converter destinatarioId para destinatario se necessário (backend espera destinatarioId)
+      final data = Map<String, dynamic>.from(messageData);
+      if (data.containsKey('destinatarioId')) {
+        // Mantém destinatarioId como está, pois o backend espera esse campo
+      } else if (data.containsKey('destinatario')) {
+        data['destinatarioId'] = data['destinatario'];
+        data.remove('destinatario');
+      }
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/multiplayer/mensagem'),
+        headers: await _getHeaders(),
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final errorMsg = decodedResponse['mensagem'] ?? 
+                        decodedResponse['message'] ?? 
+                        decodedResponse['erro'] ??
+                        decodedResponse['error'] ??
+                        'Erro ao enviar mensagem';
+        throw Exception(errorMsg);
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      if (e is FormatException) {
+        throw Exception('Erro ao processar resposta do servidor.');
+      }
+      rethrow;
+    }
   }
 
   static Future<List<dynamic>> getConversation(String userId) async {
@@ -614,7 +988,20 @@ class ApiService {
       headers: await _getHeaders(),
     );
     final data = jsonDecode(response.body);
-    return data['mensagens'] ?? [];
+    return data['conversa'] ?? [];
+  }
+
+  static Future<List<dynamic>> getUnreadMessages() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/mensagem/nao-lidas'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['mensagens'] ?? [];
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> markMessageAsRead(String messageId) async {
@@ -625,13 +1012,95 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  static Future<List<dynamic>> getUnreadMessages() async {
+  // Amizades
+  static Future<Map<String, dynamic>> sendFriendRequest(String usuarioId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/enviar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'usuarioId': usuarioId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> acceptFriendRequest(String amizadeId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/aceitar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> rejectFriendRequest(String amizadeId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/multiplayer/amizade/rejeitar'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<List<dynamic>> getFriends() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/multiplayer/mensagem/nao-lidas'),
+      Uri.parse('$baseUrl/multiplayer/amizade/amigos'),
       headers: await _getHeaders(),
     );
     final data = jsonDecode(response.body);
-    return data['mensagens'] ?? [];
+    return data['amigos'] ?? [];
+  }
+
+  static Future<List<dynamic>> getPendingFriendRequests() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/amizade/pendentes'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['solicitacoes'] ?? [];
+  }
+
+  static Future<List<dynamic>> getSentFriendRequests() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/multiplayer/amizade/enviadas'),
+      headers: await _getHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    return data['solicitacoes'] ?? [];
+  }
+
+  static Future<Map<String, dynamic>> removeFriend(String amizadeId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/multiplayer/amizade/remover'),
+      headers: await _getHeaders(),
+      body: jsonEncode({'amizadeId': amizadeId}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/buscar-usuarios?query=$query'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['usuarios'] ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> listarConversas() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/mensagem/conversas'),
+        headers: await _getHeaders(),
+      );
+      final data = jsonDecode(response.body);
+      return data['conversas'] ?? [];
+    } catch (e) {
+      print('Erro ao listar conversas: $e');
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>> getMessageStats() async {
@@ -644,12 +1113,24 @@ class ApiService {
 
   // Ranking e Estatísticas
   static Future<Map<String, dynamic>> getMultiplayerRanking() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/multiplayer/ranking'),
-      headers: await _getHeaders(),
-    );
-    final data = jsonDecode(response.body);
-    return data is Map ? Map<String, dynamic>.from(data) : {'ranking': [], 'usuarioAtual': null};
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/multiplayer/ranking'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        print('Erro ao buscar ranking: ${response.statusCode} - ${response.body}');
+        return {'ranking': [], 'usuarioAtual': null};
+      }
+      
+      final data = jsonDecode(response.body);
+      print('Ranking recebido: ${data['ranking']?.length ?? 0} jogadores');
+      return data is Map ? Map<String, dynamic>.from(data) : {'ranking': [], 'usuarioAtual': null};
+    } catch (e) {
+      print('Erro ao buscar ranking: $e');
+      return {'ranking': [], 'usuarioAtual': null};
+    }
   }
 
   static Future<Map<String, dynamic>> getMultiplayerStats() async {

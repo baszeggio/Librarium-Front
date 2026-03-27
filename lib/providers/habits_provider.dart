@@ -16,6 +16,7 @@ class Habit {
   final int totalConclusoes;
   final int totalPerdidos;
   final double taxaConclusao;
+  final bool? completado; // Indica se o hábito foi completado hoje (opcional)
 
   Habit({
     required this.id,
@@ -32,6 +33,7 @@ class Habit {
     required this.totalConclusoes,
     required this.totalPerdidos,
     required this.taxaConclusao,
+    this.completado,
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -50,6 +52,7 @@ class Habit {
       totalConclusoes: json['estatisticas']?['totalConclusoes'] ?? 0,
       totalPerdidos: json['estatisticas']?['totalPerdidos'] ?? 0,
       taxaConclusao: json['estatisticas']?['taxaConclusao']?.toDouble() ?? 0.0,
+      completado: json['completado'] ?? json['concluidoHoje'] ?? json['statusHoje'] == 'concluido',
     );
   }
 }
@@ -174,7 +177,7 @@ class HabitsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> completeHabit(String habitId) async {
+  Future<Map<String, dynamic>> completeHabit(String habitId) async {
     try {
       final response = await ApiService.completeHabit(habitId);
       
@@ -182,20 +185,24 @@ class HabitsProvider extends ChangeNotifier {
         // Recarregar hábitos para obter dados atualizados com streak atualizado
         await loadHabits();
         
-        // Aguardar um pouco para garantir que o backend processou
-        await Future.delayed(const Duration(milliseconds: 300));
+        // Retornar informações sobre conquistas desbloqueadas se houver
+        final conquistasDesbloqueadas = response['conquistasDesbloqueadas'];
+        final experienciaGanha = response['experienciaGanha'] ?? 0;
+        final novoNivel = response['novoNivel'];
         
-        // Recarregar novamente para garantir dados atualizados
-        await loadHabits();
-        
-        // A verificação de conquistas será feita pelas telas que chamam completeHabit
-        // para garantir que as conquistas sejam recarregadas corretamente
+        return {
+          'sucesso': true,
+          'conquistasDesbloqueadas': conquistasDesbloqueadas ?? [],
+          'experienciaGanha': experienciaGanha,
+          'novoNivel': novoNivel,
+        };
       } else {
         throw Exception(response['mensagem'] ?? response['message'] ?? 'Erro ao completar hábito');
       }
     } catch (e) {
       _error = e.toString();
       notifyListeners();
+      rethrow;
     }
   }
 

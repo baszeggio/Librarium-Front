@@ -80,11 +80,10 @@ class _CustomizationScreenState extends State<CustomizationScreen>
     
     if (avatarProvider.avatar != null) {
       setState(() {
-        // Carregar cor do tema ou bodyColor
         final avatar = avatarProvider.avatar!;
-        final tema = avatar.tema;
+        // Apenas usa bodyColor. Remove tema para customização.
         final bodyColor = avatar.equipamentos['bodyColor'];
-        _selectedColor = bodyColor ?? tema ?? 'red';
+        _selectedColor = bodyColor ?? 'red';
       });
     }
   }
@@ -187,7 +186,7 @@ class _CustomizationScreenState extends State<CustomizationScreen>
                             animation: Listenable.merge([_animation, _breathingAnimation]),
                             builder: (context, child) {
                               return Transform.translate(
-                                offset: Offset(0, _breathingAnimation.value * 2), // Movimento sutil de respiração
+                                offset: Offset(0, _breathingAnimation.value * 2),
                                 child: Transform.scale(
                                   scale: 1.0 + (_animation.value * 0.1),
                                   child: Stack(
@@ -379,18 +378,13 @@ class _CustomizationScreenState extends State<CustomizationScreen>
     
     try {
       final avatarProvider = context.read<AvatarProvider>();
-      
-      // Criar objeto de customização correto para a API
-      final currentAvatar = avatarProvider.avatar;
-      
-      // Definir head baseado na cor escolhida (blue -> blue_head, green -> green_head, etc)
       final headKey = '${_selectedColor}_head';
-      
+
+      // Remove 'tema' do objeto enviado para a API (e suporte/help/ajuda).
       final customization = {
         'personalizacaoAvatar': {
-          'tema': _selectedColor,
           'bodyColor': _selectedColor,
-          'head': headKey, // Atualizar head baseado na cor escolhida
+          'head': headKey,
         }
       };
       

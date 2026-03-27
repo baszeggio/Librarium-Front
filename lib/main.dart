@@ -7,9 +7,9 @@ import 'providers/habits_provider.dart';
 import 'providers/avatar_provider.dart';
 import 'providers/achievements_provider.dart';
 import 'providers/stats_provider.dart';
-import 'providers/notifications_provider.dart';
 import 'providers/multiplayer_provider.dart';
 import 'providers/messages_provider.dart';
+import 'providers/friends_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
@@ -19,7 +19,7 @@ import 'screens/stats/stats_screen.dart';
 import 'screens/multiplayer/multiplayer_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/customization/customization_screen.dart';
-import 'screens/notifications/notifications_screen.dart';
+import 'screens/friends/friends_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -42,9 +42,9 @@ class LibrariumApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AvatarProvider()),
         ChangeNotifierProvider(create: (_) => AchievementsProvider()),
         ChangeNotifierProvider(create: (_) => StatsProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
         ChangeNotifierProvider(create: (_) => MultiplayerProvider()),
         ChangeNotifierProvider(create: (_) => MessagesProvider()),
+        ChangeNotifierProvider(create: (_) => FriendsProvider()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
@@ -117,8 +117,8 @@ class LibrariumApp extends StatelessWidget {
           builder: (context, state) => const CustomizationScreen(),
         ),
         GoRoute(
-          path: '/notifications',
-          builder: (context, state) => const NotificationsScreen(),
+          path: '/friends',
+          builder: (context, state) => const FriendsScreen(),
         ),
       ],
       refreshListenable: authProvider,
